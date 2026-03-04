@@ -18,12 +18,13 @@ def main():
         print(json.dumps({"ok": False, "error": "GEMINI_API_KEY not set"}))
         sys.exit(1)
 
-    output_dir = "/tmp/nanobanana-output"
+    output_dir = "/tmp/generated-images"
     os.makedirs(output_dir, exist_ok=True)
 
     models = [
-        "gemini-2.0-flash-exp",
-        "gemini-2.0-flash-preview-image-generation",
+        "gemini-3-pro-image-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-2.0-flash-exp-image-generation",
     ]
 
     last_error = None
@@ -43,7 +44,7 @@ def main():
 
 
 def generate_with_model(api_key, model, prompt, output_dir):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     payload = {
         "contents": [
@@ -62,7 +63,10 @@ def generate_with_model(api_key, model, prompt, output_dir):
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
         method="POST"
     )
 
