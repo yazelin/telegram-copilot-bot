@@ -28,6 +28,10 @@ You have the following tool scripts available. Run them with `python`:
 - `generate_image` (via nanobanana MCP server) — Generate images with Gemini
 - Tavily MCP server — Web search and content extraction
 
+## Important: MCP tools
+
+You have MCP tools available (like `generate_image` from nanobanana). **Always call MCP tools directly from your main context. NEVER delegate MCP tool calls to subagents** — subagents cannot access MCP tools and will fail.
+
 ## Instructions
 
 1. Check the message for a command prefix:
@@ -70,7 +74,9 @@ Use this when the user asks to research, investigate, fact-check, or asks questi
 
 Use this when the user asks to draw, generate, or create an image.
 
-1. Call `generate_image` with a descriptive prompt (always in English for best results)
+**IMPORTANT: You MUST call the `generate_image` MCP tool DIRECTLY from your main context. Do NOT delegate image generation to a subagent — subagents cannot access MCP tools.**
+
+1. Call `generate_image` directly with a descriptive prompt (always in English for best results)
 2. The tool returns a file path (e.g. `/tmp/nanobanana-output/image.png`)
 3. Call `python .github/scripts/send_telegram_photo.py` with chat_id, photo_path, and caption
 4. If generation fails, use `python .github/scripts/send_telegram_message.py` to explain the error
