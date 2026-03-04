@@ -45,12 +45,11 @@ jobs:
           {
             "mcpServers": {
               "nanobanana": {
-                "type": "local",
                 "command": "docker",
                 "args": [
                   "run", "-i", "--rm",
                   "-v", "/tmp:/tmp:rw",
-                  "-e", "NANOBANANA_GEMINI_API_KEY=${GEMINI_API_KEY}",
+                  "-e", "NANOBANANA_GEMINI_API_KEY",
                   "-e", "NANOBANANA_OUTPUT_DIR=/tmp/nanobanana-output",
                   "-e", "NANOBANANA_MODEL=gemini-3-pro-image-preview",
                   "-e", "NANOBANANA_FALLBACK_MODELS=gemini-3.1-flash-image-preview,gemini-2.5-flash-image",
@@ -59,12 +58,13 @@ jobs:
                   "ghcr.io/astral-sh/uv:python3.12-alpine",
                   "uvx", "nanobanana-py"
                 ],
-                "tools": ["generate_image"]
+                "env": {
+                  "NANOBANANA_GEMINI_API_KEY": "${GEMINI_API_KEY}"
+                }
               },
               "tavily": {
                 "type": "http",
-                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}",
-                "tools": ["*"]
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
               }
             }
           }
