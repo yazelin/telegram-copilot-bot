@@ -41,41 +41,17 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           mkdir -p ~/.copilot
-          cat > ~/.copilot/mcp-config.json << 'MCPEOF'
+          cat > ~/.copilot/mcp-config.json << MCPEOF
           {
             "mcpServers": {
-              "nanobanana": {
-                "type": "local",
-                "command": "docker",
-                "args": [
-                  "run", "-i", "--rm",
-                  "-v", "/tmp:/tmp:rw",
-                  "-e", "NANOBANANA_GEMINI_API_KEY",
-                  "-e", "NANOBANANA_OUTPUT_DIR=/tmp/nanobanana-output",
-                  "-e", "NANOBANANA_MODEL=gemini-3-pro-image-preview",
-                  "-e", "NANOBANANA_FALLBACK_MODELS=gemini-3.1-flash-image-preview,gemini-2.5-flash-image",
-                  "-e", "NANOBANANA_TIMEOUT=120",
-                  "-e", "NANOBANANA_DEBUG=1",
-                  "ghcr.io/astral-sh/uv:python3.12-alpine",
-                  "uvx", "nanobanana-py"
-                ],
-                "env": {
-                  "NANOBANANA_GEMINI_API_KEY": "<GEMINI_KEY_PLACEHOLDER>"
-                },
-                "tools": ["*"]
-              },
               "tavily": {
                 "type": "http",
-                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=<TAVILY_KEY_PLACEHOLDER>",
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}",
                 "tools": ["*"]
               }
             }
           }
           MCPEOF
-          sed -i "s|<GEMINI_KEY_PLACEHOLDER>|${GEMINI_API_KEY}|g" ~/.copilot/mcp-config.json
-          sed -i "s|<TAVILY_KEY_PLACEHOLDER>|${TAVILY_API_KEY}|g" ~/.copilot/mcp-config.json
-          echo "MCP config written:"
-          cat ~/.copilot/mcp-config.json | python3 -m json.tool 2>&1 || echo "WARNING: Invalid JSON!"
 
       - name: Configure Git
         run: |
