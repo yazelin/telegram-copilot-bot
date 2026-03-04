@@ -41,10 +41,11 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: |
           mkdir -p ~/.copilot
-          cat > ~/.copilot/mcp-config.json << EOF
+          cat > ~/.copilot/mcp-config.json << 'MCPEOF'
           {
             "mcpServers": {
               "nanobanana": {
+                "type": "local",
                 "command": "docker",
                 "args": [
                   "run", "-i", "--rm",
@@ -59,16 +60,22 @@ jobs:
                   "uvx", "nanobanana-py"
                 ],
                 "env": {
-                  "NANOBANANA_GEMINI_API_KEY": "${GEMINI_API_KEY}"
-                }
+                  "NANOBANANA_GEMINI_API_KEY": "<GEMINI_KEY_PLACEHOLDER>"
+                },
+                "tools": ["*"]
               },
               "tavily": {
                 "type": "http",
-                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=<TAVILY_KEY_PLACEHOLDER>",
+                "tools": ["*"]
               }
             }
           }
-          EOF
+          MCPEOF
+          sed -i "s|<GEMINI_KEY_PLACEHOLDER>|${GEMINI_API_KEY}|g" ~/.copilot/mcp-config.json
+          sed -i "s|<TAVILY_KEY_PLACEHOLDER>|${TAVILY_API_KEY}|g" ~/.copilot/mcp-config.json
+          echo "MCP config written:"
+          cat ~/.copilot/mcp-config.json | python3 -m json.tool 2>&1 || echo "WARNING: Invalid JSON!"
 
       - name: Configure Git
         run: |
