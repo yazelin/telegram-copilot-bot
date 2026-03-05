@@ -37,18 +37,37 @@ jobs:
           GH_TOKEN: ${{ secrets.FACTORY_PAT }}
         run: bash .github/scripts/route_command.sh
 
-      - name: Setup Node.js
+      - name: Check App Factory availability
+        id: feature_gate
         if: steps.route.outputs.needs_copilot == 'true'
+        env:
+          TEXT: ${{ inputs.text }}
+          CHAT_ID: ${{ inputs.chat_id }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          FACTORY_PAT: ${{ secrets.FACTORY_PAT }}
+        run: |
+          if [[ ("$TEXT" == /app* || "$TEXT" == /issue*) && -z "$FACTORY_PAT" ]]; then
+            curl -s -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{\"chat_id\": \"${CHAT_ID}\", \"text\": \"⚙️ App Factory 未設定。請執行 setup.sh 並選擇 Full tier 以啟用 /app 和 /issue 功能。\"}"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install GitHub Copilot CLI
-        if: steps.route.outputs.needs_copilot == 'true'
+        if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         run: npm install -g @github/copilot
 
       - name: Setup MCP config
-        if: steps.route.outputs.needs_copilot == 'true'
+        if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
@@ -67,13 +86,13 @@ jobs:
           MCPEOF
 
       - name: Configure Git
-        if: steps.route.outputs.needs_copilot == 'true'
+        if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
       - name: Run Copilot agent
-        if: steps.route.outputs.needs_copilot == 'true'
+        if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

@@ -19,7 +19,8 @@ jobs:
         env:
           ACTOR: ${{ github.actor }}
         run: |
-          if [[ "$ACTOR" != "yazelin" && \
+          OWNER="${{ github.repository_owner }}"
+          if [[ "$ACTOR" != "$OWNER" && \
                 "$ACTOR" != "github-actions[bot]" ]]; then
             echo "::error::Unauthorized caller: $ACTOR"
             exit 1

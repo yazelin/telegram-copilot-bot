@@ -126,6 +126,10 @@ $MESSAGE" || true
     ;;
 
   /draw\ *)
+    if [ -z "${GEMINI_API_KEY:-}" ]; then
+      send_msg "$CHAT_ID" "⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      set_output false; exit 0
+    fi
     DESCRIPTION="${TEXT#/draw }"
     DESCRIPTION="${DESCRIPTION#"${DESCRIPTION%%[![:space:]]*}"}"
 
@@ -179,6 +183,10 @@ $MESSAGE" || true
     ;;
 
   /translate\ *)
+    if [ -z "${GEMINI_API_KEY:-}" ]; then
+      send_msg "$CHAT_ID" "⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      set_output false; exit 0
+    fi
     INPUT="${TEXT#/translate }"
     INPUT="${INPUT#"${INPUT%%[![:space:]]*}"}"
 
@@ -214,6 +222,10 @@ $TRANSLATED"
 
   *)
     # No command prefix: try Gemini chat, fallback to Copilot
+    if [ -z "${GEMINI_API_KEY:-}" ]; then
+      set_output true
+      exit 0
+    fi
     RESULT=$(gemini_chat chat "$TEXT") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
 
