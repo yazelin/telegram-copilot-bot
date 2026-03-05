@@ -11,7 +11,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     if: startsWith(github.head_ref, 'issue-')
     steps:
       - name: Validate secrets
@@ -158,3 +158,20 @@ jobs:
               -f chat_id="${NOTIFY_CHAT_ID}" \
               -f text="🔀 ${{ github.repository }} PR #${PR_NUM} merged" || true
           fi
+
+      - name: Handle review failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          NOTIFY_REPO: PLACEHOLDER_NOTIFY_REPO
+          NOTIFY_CHAT_ID: PLACEHOLDER_CHAT_ID
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          ISSUE_NUM=$(gh pr view ${PR_NUM} --json body --jq '.body' | grep -oP 'Closes #\K\d+' || echo "")
+          if [ -n "$ISSUE_NUM" ]; then
+            gh issue edit ${ISSUE_NUM} --add-label agent-stuck || true
+          fi
+          GH_TOKEN="${NOTIFY_TOKEN}" gh workflow run notify.yml --repo ${NOTIFY_REPO} \
+            -f chat_id="${NOTIFY_CHAT_ID}" \
+            -f text="⚠️ ${{ github.repository }} PR #${PR_NUM} review failed (timeout or error)" || true
