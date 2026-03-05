@@ -33,6 +33,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Debug secrets
+        env:
+          CALLBACK_TOKEN: ${{ secrets.CALLBACK_TOKEN }}
+          CALLBACK_URL: ${{ secrets.CALLBACK_URL }}
+        run: |
+          echo "CALLBACK_TOKEN length: ${#CALLBACK_TOKEN}"
+          echo "CALLBACK_TOKEN first8: ${CALLBACK_TOKEN:0:8}"
+          echo "CALLBACK_URL length: ${#CALLBACK_URL}"
+          echo "CALLBACK_URL last20: ${CALLBACK_URL: -20}"
+          # Test callback directly
+          curl -s -w "\nHTTP %{http_code}" -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Secret: $CALLBACK_TOKEN" \
+            -d '{"type":"bot_reply","chat_id":"debug","text":"test"}'
+
       - name: Route command
         id: route
         env:
