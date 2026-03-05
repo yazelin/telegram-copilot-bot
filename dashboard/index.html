@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Copilot Bot — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <span class="header-logo">🤖</span>
+        <h1 class="header-title">Telegram Copilot Bot</h1>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn btn-icon" title="Refresh data">
+          <svg class="icon icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span class="btn-label">Refresh</span>
+        </button>
+        <button id="btn-settings" class="btn btn-icon" title="Settings">
+          <svg class="icon icon-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel" aria-hidden="true">
+      <div class="settings-inner">
+        <h2 class="settings-title">Settings</h2>
+        <div class="settings-grid">
+          <div class="field">
+            <label for="input-api-url">Worker API URL</label>
+            <input id="input-api-url" type="url" placeholder="https://your-worker.workers.dev" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="input-org">GitHub Org</label>
+            <input id="input-org" type="text" placeholder="my-org" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="input-chat-id">Chat ID</label>
+            <input id="input-chat-id" type="text" placeholder="123456789" autocomplete="off">
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button id="btn-save-settings" class="btn btn-primary">Save</button>
+          <button id="btn-cancel-settings" class="btn btn-ghost">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <section class="stats-bar" id="stats-bar">
+      <div class="stat-card stat-card--blue" id="stat-messages">
+        <div class="stat-icon">💬</div>
+        <div class="stat-body">
+          <span class="stat-value skeleton-text" data-key="totalMessages">—</span>
+          <span class="stat-label">Total Messages</span>
+        </div>
+      </div>
+      <div class="stat-card stat-card--green" id="stat-apps">
+        <div class="stat-icon">📦</div>
+        <div class="stat-body">
+          <span class="stat-value skeleton-text" data-key="totalApps">—</span>
+          <span class="stat-label">Total Apps</span>
+        </div>
+      </div>
+      <div class="stat-card stat-card--purple" id="stat-draws">
+        <div class="stat-icon">🎨</div>
+        <div class="stat-body">
+          <span class="stat-value skeleton-text" data-key="totalDraws">—</span>
+          <span class="stat-label">Total Draws</span>
+        </div>
+      </div>
+      <div class="stat-card stat-card--amber" id="stat-builds">
+        <div class="stat-icon">🔨</div>
+        <div class="stat-body">
+          <span class="stat-value skeleton-text" data-key="totalBuilds">—</span>
+          <span class="stat-label">Total Builds</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Repos Column -->
+      <section class="column column-repos">
+        <h2 class="column-heading">Repositories</h2>
+        <div id="repos-container" class="repos-grid">
+          <!-- skeleton placeholders -->
+          <div class="repo-card skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+          <div class="repo-card skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+          <div class="repo-card skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+          <div class="repo-card skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div><div class="skeleton-line w40"></div></div>
+        </div>
+      </section>
+
+      <!-- Chat Column -->
+      <section class="column column-chat">
+        <h2 class="column-heading">Chat History</h2>
+        <div id="chat-container" class="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <!-- skeleton placeholders -->
+            <div class="bubble-row bubble-row--bot"><div class="bubble skeleton-bubble"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div></div></div>
+            <div class="bubble-row bubble-row--user"><div class="bubble skeleton-bubble"><div class="skeleton-line w60"></div></div></div>
+            <div class="bubble-row bubble-row--bot"><div class="bubble skeleton-bubble"><div class="skeleton-line w80"></div><div class="skeleton-line w40"></div></div></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="toast-container"></div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
