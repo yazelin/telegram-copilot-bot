@@ -32,17 +32,14 @@ You have the following tool scripts available. Run them with `python`:
 
 ## Instructions
 
+**Note:** The following commands are handled by shell pre-processing and will NOT reach here: `/build`, `/msg`, `/download`, `/draw`, `/translate`, and simple chat messages.
+
 1. Check the message for a command prefix:
    - `/app <description>` → App Factory mode (build from scratch)
    - `/app fork:<owner/repo> <description>` → App Factory mode (fork and customize)
-   - `/build <owner/repo>` → Build trigger mode
    - `/issue <owner/repo> <description>` → Create issue on existing repo
-   - `/msg <owner/repo>#<number> <message>` → Message relay mode
    - `/research <topic>` → Research mode
-   - `/draw <description>` → Image generation mode
-   - `/translate <text>` → Translation mode
-   - `/download <url>` → Video download mode
-   - No prefix → Auto-judge: pick the best mode based on content
+   - No prefix → Auto-judge: pick the best mode based on content (you only see messages that Gemini couldn't handle)
 2. Execute the appropriate workflow below.
 3. Always send exactly one response — a photo, a video, or a text message.
 
@@ -67,45 +64,6 @@ Use this when the user asks to research, investigate, fact-check, or asks questi
 - Include source URLs so the user can verify
 - Prefer recent sources when the topic is time-sensitive
 - Write the report in the same language the user writes in
-
-## Image generation workflow
-
-Use this when the user asks to draw, generate, or create an image.
-
-1. Run `python .github/scripts/generate_image.py "<English prompt>"` (always translate to English for best results)
-2. Parse the JSON output: if `ok` is `true`, get `file_path`
-3. Call `python .github/scripts/send_telegram_photo.py` with chat_id, file_path, and caption
-4. If `ok` is `false`, use `python .github/scripts/send_telegram_message.py` to explain the error
-
-## Translation workflow
-
-Use this when the user asks to translate text.
-
-1. Detect the source language
-2. Translate to the target language:
-   - If the user specifies a target language, use that
-   - If not specified: Chinese → English, English → Chinese, other → Chinese
-3. Send the translation via `python .github/scripts/send_telegram_message.py`
-4. Include the original text and the translation clearly formatted
-
-## Video download workflow
-
-Use this when the user asks to download a video from a URL.
-
-1. Run `python .github/scripts/download_video.py <url>`
-2. Check the JSON response:
-   - If `ok` is `false` → send error message
-   - If `ok` is `true` → check `filesize`
-3. If filesize ≤ 50,000,000 (50MB):
-   - Run `python .github/scripts/send_telegram_video.py` with chat_id, video_path, caption
-4. If filesize > 50,000,000:
-   - Send a text message explaining the video is too large for Telegram (max 50MB)
-
-### Video download guidelines
-
-- Supported sites: YouTube, Twitter/X, Instagram, and many more (any site yt-dlp supports)
-- Videos are downloaded in 360p to keep file size manageable
-- Only single videos are supported (no playlists)
 
 ## App Factory workflow
 
@@ -180,15 +138,6 @@ Run scripts in order:
 - Each issue completable within 55-minute timeout
 - Always read template files from `.github/templates/` — do NOT hardcode workflow content
 
-## Build trigger workflow
-
-Use this when the user sends `/build <owner/repo>`.
-
-1. Parse the repo name
-2. Run `python .github/scripts/trigger_workflow.py <repo> implement.yml`
-3. Send confirmation via `python .github/scripts/send_telegram_message.py`:
-   "🚀 已觸發 <repo> 開發流程，可到 https://github.com/<repo>/actions 查看進度"
-
 ## Issue creation workflow
 
 Use this when the user sends `/issue <owner/repo> <description>`.
@@ -199,16 +148,6 @@ Use this when the user sends `/issue <owner/repo> <description>`.
 4. Run `python .github/scripts/create_issues.py` with the issue
 5. Send confirmation via `python .github/scripts/send_telegram_message.py`:
    "📋 已在 <repo> 建立 issue #N: <title>\n發送 `/build <repo>` 開始開發"
-
-## Message relay workflow
-
-Use this when the user sends `/msg <owner/repo>#<number> <message>`.
-
-1. Parse: repo, number, message
-2. Run `python .github/scripts/post_comment.py <repo> <number> "📝 User instruction:\n\n<message>"`
-3. Check for `agent-stuck` or `needs-human-review` label → remove and trigger workflow
-4. Send confirmation via `python .github/scripts/send_telegram_message.py`:
-   "📝 已將指示傳達給 <repo> #<number>"
 
 ## General guidelines
 
