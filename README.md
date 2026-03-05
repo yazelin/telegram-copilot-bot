@@ -20,22 +20,37 @@
 | 子 Repo 結構 | implement.yml + review.yml + skills | 相同 |
 
 
+## 版本歷史
+
+| 版本 | Tag | 說明 |
+|------|-----|------|
+| v2.0（目前） | `feat/shell-routing` | Shell 前處理 + Gemini Flash API，大幅減少 Premium Request 消耗 |
+| v1.0 | `v1.0-before-shell-routing` | 所有訊息都經過 Copilot CLI 處理 |
+
+> **v2.0 改動重點**：新增 `route_command.sh` 和 `gemini_chat.py`，簡單命令（`/build`、`/msg`、`/download`、`/draw`、`/translate`、一般聊天）由 shell 腳本 + Gemini Flash API 直接處理，不消耗 Premium Request。只有 `/app`、`/issue`、`/research` 和 Gemini 無法處理的訊息才呼叫 Copilot CLI。
+
 ## 運作方式
 
 ```
-你 (Telegram) → Cloudflare Worker → GitHub Actions → Copilot CLI → Telegram 回覆
-                                          ↓
-                                    App Factory 模式
-                                          ↓
-                              建立/Fork Repo (aw-apps 組織)
-                                          ↓
-                              規劃 Issues → 實作 → 審查 → 部署
+你 (Telegram) → Cloudflare Worker → GitHub Actions
+                                          │
+                                    route_command.sh 解析命令
+                                          │
+                        ┌─────────────────┼─────────────────┐
+                        ▼                 ▼                 ▼
+                  Shell 直接處理     Gemini Flash API    Copilot CLI
+                  /build, /msg      /draw, /translate   /app, /issue
+                  /download         一般聊天             /research
+                  (0 Premium)       (0 Premium)         (1 Premium)
 ```
 
 1. 傳送訊息給 Telegram 機器人
 2. Cloudflare Worker 接收 Webhook，驗證使用者身份，轉發到 GitHub Actions
-3. GitHub Actions 安裝 Copilot CLI（`npm install -g @github/copilot`）並以 `--autopilot --yolo` 模式執行
-4. Copilot 處理請求並回覆 — 或啟動完整的開發流水線
+3. `route_command.sh` 解析命令前綴，決定路由：
+   - **Shell 直接處理**：`/build`、`/msg`、`/download` → 呼叫對應 Python 腳本（0 cost）
+   - **Gemini Flash API**：`/draw`、`/translate`、一般聊天 → `gemini_chat.py`（0 Premium Request）
+   - **Copilot CLI**：`/app`、`/issue`、`/research`、Gemini 無法處理的訊息（1 Premium Request）
+4. 只在需要時才安裝並啟動 Copilot CLI
 
 ## 指令列表
 
@@ -197,6 +212,8 @@ telegram-copilot-bot/
 │   │   ├── trigger_workflow.py      # 觸發子 Repo 工作流程
 │   │   ├── post_comment.py          # Issue/PR 留言
 │   │   ├── manage_labels.py         # 標籤管理
+│   │   ├── route_command.sh          # 命令路由器（Shell 前處理）
+│   │   ├── gemini_chat.py           # Gemini Flash 文字 API（聊天/翻譯/prompt 優化）
 │   │   ├── generate_image.py        # Gemini 圖片生成（直接 REST API）
 │   │   ├── download_video.py        # yt-dlp 影片下載
 │   │   ├── send_telegram_message.py # 傳送文字
