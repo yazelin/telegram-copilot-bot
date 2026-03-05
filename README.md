@@ -272,8 +272,8 @@ https://your-worker.workers.dev/register?token=YOUR_TELEGRAM_SECRET
 
 ## 相關文章
 
-- [telegram-copilot-bot：不用 gh-aw 的輕量版 Telegram AI 機器人](https://yazelin.github.io/ai/2026/03/05/telegram-copilot-bot-no-ghaw/)
-- [aw-telegram-bot 系列目錄（原版）](https://yazelin.github.io/index/2026/03/04/aw-telegram-bot-series-index/)
+- [telegram-copilot-bot：不用 gh-aw 的輕量版 Telegram AI 機器人](https://yazelin.github.io/ai/2026/03/05/telegram-copilot-bot-no-ghaw.html)
+- [aw-telegram-bot 系列目錄（原版）](https://yazelin.github.io/index/2026/03/04/aw-telegram-bot-series-index.html)
 
 ## 授權
 
