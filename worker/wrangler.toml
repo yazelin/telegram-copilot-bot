@@ -5,3 +5,7 @@ compatibility_date = "2024-01-01"
 [vars]
 ALLOWED_USERS = "850654509"
 ALLOWED_CHATS = ""
+
+[[kv_namespaces]]
+binding = "BOT_MEMORY"
+id = "4f000e0c5c7f42d2ad77161a7a12b254"

@@ -1,11 +1,93 @@
+// --- KV Helpers ---
+
+const MAX_HISTORY = 20;
+const MAX_HISTORY_JSON_LENGTH = 2000;
+
+async function appendHistory(kv, chatId, entry) {
+  const key = `chat:${chatId}:history`;
+  let history = [];
+  try {
+    const existing = await kv.get(key, "json");
+    if (Array.isArray(existing)) history = existing;
+  } catch {}
+  history.push(entry);
+  if (history.length > MAX_HISTORY) {
+    history = history.slice(-MAX_HISTORY);
+  }
+  await kv.put(key, JSON.stringify(history));
+  return history;
+}
+
+async function getHistory(kv, chatId) {
+  const key = `chat:${chatId}:history`;
+  try {
+    const history = await kv.get(key, "json");
+    return Array.isArray(history) ? history : [];
+  } catch {
+    return [];
+  }
+}
+
+function truncateHistoryForDispatch(history) {
+  let entries = [...history];
+  let json = JSON.stringify(entries);
+  while (json.length > MAX_HISTORY_JSON_LENGTH && entries.length > 1) {
+    entries = entries.slice(1);
+    json = JSON.stringify(entries);
+  }
+  return json;
+}
+
+async function getPrefs(kv, chatId) {
+  try {
+    const prefs = await kv.get(`chat:${chatId}:prefs`, "json");
+    return prefs || {};
+  } catch {
+    return {};
+  }
+}
+
+async function incrementStats(kv, field) {
+  const stats = (await kv.get("stats", "json")) || {};
+  stats[field] = (stats[field] || 0) + 1;
+  await kv.put("stats", JSON.stringify(stats));
+  return stats;
+}
+
+// --- CORS & Response Helpers ---
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Secret",
+  };
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders() },
+  });
+}
+
+// --- Main Router ---
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
+    // Webhook
     if (url.pathname === "/webhook" && request.method === "POST") {
       return handleWebhook(request, env, ctx);
     }
 
+    // Register webhook
     if (url.pathname === "/register") {
       const token = url.searchParams.get("token");
       if (token !== env.TELEGRAM_SECRET) {
@@ -14,9 +96,47 @@ export default {
       return registerWebhook(url, env);
     }
 
+    // API: callback from Actions
+    if (url.pathname === "/api/callback" && request.method === "POST") {
+      return handleCallback(request, env);
+    }
+
+    // API: chat history
+    const historyMatch = url.pathname.match(/^\/api\/history\/(\d+)$/);
+    if (historyMatch && request.method === "GET") {
+      const history = await getHistory(env.BOT_MEMORY, historyMatch[1]);
+      return jsonResponse(history);
+    }
+
+    // API: stats
+    if (url.pathname === "/api/stats" && request.method === "GET") {
+      const stats = (await env.BOT_MEMORY.get("stats", "json")) || {};
+      return jsonResponse(stats);
+    }
+
+    // API: repos metadata
+    if (url.pathname === "/api/repos" && request.method === "GET") {
+      const list = await env.BOT_MEMORY.list({ prefix: "repo:" });
+      const repos = {};
+      for (const key of list.keys) {
+        const val = await env.BOT_MEMORY.get(key.name, "json");
+        if (val) repos[key.name.replace("repo:", "")] = val;
+      }
+      return jsonResponse(repos);
+    }
+
+    // API: user prefs
+    const prefsMatch = url.pathname.match(/^\/api\/prefs\/(\d+)$/);
+    if (prefsMatch && request.method === "GET") {
+      const prefs = await getPrefs(env.BOT_MEMORY, prefsMatch[1]);
+      return jsonResponse(prefs);
+    }
+
     return new Response("telegram-copilot-bot relay", { status: 200 });
   },
 };
+
+// --- Webhook Handler ---
 
 async function handleWebhook(request, env, ctx) {
   const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
@@ -45,13 +165,76 @@ async function handleWebhook(request, env, ctx) {
     return new Response("OK", { status: 200 });
   }
 
-  ctx.waitUntil(dispatchToGitHub(update, env));
+  ctx.waitUntil((async () => {
+    // Store user message in KV
+    await appendHistory(env.BOT_MEMORY, chatId, {
+      role: "user",
+      text: msg.text,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Increment stats
+    await incrementStats(env.BOT_MEMORY, "totalMessages");
+    const cmd = msg.text.split(" ")[0].toLowerCase();
+    if (cmd === "/draw") await incrementStats(env.BOT_MEMORY, "totalDraws");
+    if (cmd === "/app") await incrementStats(env.BOT_MEMORY, "totalApps");
+    if (cmd === "/build") await incrementStats(env.BOT_MEMORY, "totalBuilds");
+
+    // Read history + prefs, then dispatch
+    const history = await getHistory(env.BOT_MEMORY, chatId);
+    const prefs = await getPrefs(env.BOT_MEMORY, chatId);
+    await dispatchToGitHub(update, env, history, prefs);
+  })());
+
   return new Response("OK", { status: 200 });
 }
 
-async function dispatchToGitHub(update, env) {
+// --- Callback Handler ---
+
+async function handleCallback(request, env) {
+  const secret = request.headers.get("X-Secret");
+  if (secret !== env.TELEGRAM_SECRET) {
+    return jsonResponse({ error: "Unauthorized" }, 403);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Bad Request" }, 400);
+  }
+
+  const { type, chat_id, text, timestamp, repo, command, description } = body;
+
+  if (type === "bot_reply" && chat_id && text) {
+    await appendHistory(env.BOT_MEMORY, chat_id, {
+      role: "bot",
+      text: text.slice(0, 500),
+      timestamp: timestamp || new Date().toISOString(),
+    });
+  }
+
+  if (type === "repo_created" && repo) {
+    await env.BOT_MEMORY.put(`repo:${repo}`, JSON.stringify({
+      createdAt: timestamp || new Date().toISOString(),
+      command: command || "",
+      chatId: chat_id || "",
+      description: description || "",
+    }));
+  }
+
+  return jsonResponse({ ok: true });
+}
+
+// --- GitHub Dispatch ---
+
+async function dispatchToGitHub(update, env, history, prefs) {
   const msg = update.message;
   const workflowFile = "telegram-bot.yml";
+
+  // Exclude current message from history (it's already in `text`)
+  const historyJson = truncateHistoryForDispatch(history.slice(0, -1));
+  const prefsJson = JSON.stringify(prefs);
 
   const response = await fetch(
     `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${workflowFile}/dispatches`,
@@ -69,6 +252,8 @@ async function dispatchToGitHub(update, env) {
           chat_id: String(msg.chat.id),
           text: msg.text,
           username: msg.from?.username || "",
+          history: historyJson,
+          prefs: prefsJson,
         },
       }),
     }
@@ -78,6 +263,8 @@ async function dispatchToGitHub(update, env) {
     console.error("GitHub dispatch failed:", response.status, await response.text());
   }
 }
+
+// --- Webhook Registration ---
 
 async function registerWebhook(requestUrl, env) {
   const webhookUrl = `${requestUrl.protocol}//${requestUrl.hostname}/webhook`;
