@@ -20,10 +20,10 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        github.event.pull_request.merged == true &&
-       startsWith(github.event.pull_request.head.ref, 'issue-')) ||
+       github.event.pull_request.head.ref != 'main') ||
       (github.event_name == 'pull_request_review' &&
        github.event.review.state == 'changes_requested' &&
-       startsWith(github.event.pull_request.head.ref, 'issue-'))
+       github.event.pull_request.head.ref != 'main')
     steps:
       - name: Validate secrets
         env:
@@ -181,9 +181,10 @@ jobs:
                  - Fix any bare imports before pushing
               6. Verify using the Validation section
               7. Confirm each Acceptance Criteria checkbox is met
-              8. You are already on branch issue-${ISSUE_NUM}-impl
-              9. git add, commit, push
-              10. Create PR: gh pr create --title 'Implement #${ISSUE_NUM}' --body 'Closes #${ISSUE_NUM}'
+              8. You are already on branch issue-${ISSUE_NUM}-impl — use this branch as-is
+              9. IMPORTANT: Do NOT create or switch to a different branch. Push to the current branch only.
+              10. git add, commit, push: git push -u origin issue-${ISSUE_NUM}-impl
+              11. Create PR: gh pr create --title 'Implement #${ISSUE_NUM}' --body 'Closes #${ISSUE_NUM}'
 
               If you cannot meet an acceptance criterion, explain why in the PR body.
             "
