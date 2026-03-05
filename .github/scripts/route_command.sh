@@ -60,7 +60,9 @@ case "$TEXT" in
     RESULT=$(trigger_wf "$REPO" "implement.yml") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
     if [ "$OK" = "True" ]; then
-      send_msg "$CHAT_ID" "🚀 已觸發 $REPO 開發流程，可到 https://github.com/$REPO/actions 查看進度"
+      MSG="🚀 已觸發 $REPO 開發流程，可到 https://github.com/$REPO/actions 查看進度"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
     else
       ERROR=$(printf '%s' "$RESULT" | json_field error "Unknown error" || echo "$RESULT")
       send_error "觸發 build 失敗: $ERROR"
@@ -97,7 +99,9 @@ $MESSAGE" || true
     manage_labels "$REPO" "$NUMBER" remove "needs-human-review" 2>/dev/null || true
     trigger_wf "$REPO" "implement.yml" 2>/dev/null || true
 
-    send_msg "$CHAT_ID" "📝 已將指示傳達給 $REPO #$NUMBER"
+    MSG="📝 已將指示傳達給 $REPO #$NUMBER"
+    send_msg "$CHAT_ID" "$MSG"
+    post_callback "$MSG"
     set_output false
     ;;
 
@@ -131,6 +135,7 @@ $MESSAGE" || true
 
     if [ "$FILESIZE" -le 50000000 ]; then
       send_video "$CHAT_ID" "$FILE_PATH" "$TITLE" || send_error "影片傳送失敗"
+      post_callback "[影片] $TITLE"
     else
       send_msg "$CHAT_ID" "⚠️ 影片太大 ($(( FILESIZE / 1048576 ))MB)，超過 Telegram 50MB 限制"
     fi
@@ -183,6 +188,7 @@ $MESSAGE" || true
       CAPTION="$DESCRIPTION
 🤖 $IMG_MODEL"
       send_photo "$CHAT_ID" "$IMG_PATH" "$CAPTION" || send_error "圖片傳送失敗"
+      post_callback "[圖片] $CAPTION"
     else
       ERROR=$(printf '%s' "$IMG_RESULT" | json_field error "圖片生成失敗" || echo "圖片生成失敗")
       send_error "圖片生成失敗: $ERROR"
@@ -208,9 +214,11 @@ $MESSAGE" || true
 
     if [ "$OK" = "True" ]; then
       TRANSLATED=$(printf '%s' "$RESULT" | json_field text "" || echo "")
-      send_msg "$CHAT_ID" "🌐 翻譯結果:
+      MSG="🌐 翻譯結果:
 
 $TRANSLATED"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
     else
       ERROR=$(printf '%s' "$RESULT" | json_field error "翻譯失敗" || echo "翻譯失敗")
       send_error "翻譯失敗: $ERROR"
