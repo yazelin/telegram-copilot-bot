@@ -48,6 +48,13 @@ def main():
             break
         if attempt < 3:
             time.sleep(5)
+    # Set homepage URL to GitHub Pages site
+    repo_name = repo.split("/")[-1]
+    org = repo.split("/")[0]
+    homepage = f"https://{org}.github.io/{repo_name}/"
+    subprocess.run(
+        ["gh", "api", f"repos/{repo}", "-X", "PATCH", "-f", f"homepage={homepage}"],
+        capture_output=True, text=True)
     print(json.dumps({"ok": True, "files_pushed": len(files), "pages_enabled": pages_enabled}))
 
 if __name__ == "__main__":
