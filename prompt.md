@@ -111,11 +111,14 @@ Run scripts in order:
    - `AGENTS.md` — project spec in English (Goal, Tech Stack, Architecture, Global AC)
    - `.github/workflows/implement.yml` — read from `.github/templates/workflows/implement.yml`, replace `PLACEHOLDER_NOTIFY_REPO` with `yazelin/telegram-copilot-bot` and `PLACEHOLDER_CHAT_ID` with the current chat ID
    - `.github/workflows/review.yml` — read from `.github/templates/workflows/review.yml`, replace same placeholders
-   - `.github/skills/issue-workflow/SKILL.md` — read from `.github/templates/skills/issue-workflow-SKILL.md`
-   - `.github/skills/code-standards/SKILL.md` — read from `.github/templates/skills/code-standards-SKILL.md`
-   - `.github/skills/testing/SKILL.md` — read from `.github/templates/skills/testing-SKILL.md`
-   - `.github/skills/frontend-design/SKILL.md` — read from `.github/templates/skills/frontend-design-SKILL.md` (if project has HTML/CSS frontend)
-   - `.github/skills/deploy-pages/SKILL.md` — read from `.github/templates/skills/deploy-pages-SKILL.md` (if using GitHub Pages)
+   - Skills — read from `.github/templates/skills/` and include based on project needs:
+     - `issue-workflow-SKILL.md` → **always include** (required for implement/review loop)
+     - `code-standards-SKILL.md` → **always include**
+     - `testing-SKILL.md` → **always include**
+     - `frontend-design-SKILL.md` → include if project has HTML/CSS/JS frontend
+     - `deploy-pages-SKILL.md` → include if deploying to GitHub Pages
+     - List all available skills with: `ls .github/templates/skills/`
+     - Choose additional skills that match the project's tech stack and goals
    - App-specific source files (index.html, styles.css, etc.)
 3. `python .github/scripts/setup_repo.py` with ALL files above as JSON
 4. `python .github/scripts/create_issues.py` with planned issues
