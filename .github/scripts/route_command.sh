@@ -233,15 +233,26 @@ $TRANSLATED"
     esac
 
     if [ -n "${CALLBACK_URL:-}" ]; then
-      python3 -c "
+      PREF_RESULT=$(PREF_JSON_KEY="$JSON_KEY" PREF_JSON_VAL="$PREF_VAL" PREF_CHAT_ID="$CHAT_ID" python3 -c "
 import json, urllib.request, os
-payload = json.dumps({'type': 'set_prefs', 'chat_id': '$CHAT_ID', 'prefs': {'$JSON_KEY': '$PREF_VAL'}}).encode()
-req = urllib.request.Request('${CALLBACK_URL}', data=payload,
-    headers={'Content-Type': 'application/json', 'X-Secret': os.environ.get('TELEGRAM_SECRET', '')})
-urllib.request.urlopen(req, timeout=10)
-" 2>/dev/null && \
-        send_msg "$CHAT_ID" "✅ 已設定 $PREF_KEY = $PREF_VAL" || \
-        send_error "設定失敗"
+try:
+    payload = json.dumps({
+        'type': 'set_prefs',
+        'chat_id': os.environ['PREF_CHAT_ID'],
+        'prefs': {os.environ['PREF_JSON_KEY']: os.environ['PREF_JSON_VAL']}
+    }).encode()
+    req = urllib.request.Request(os.environ['CALLBACK_URL'], data=payload,
+        headers={'Content-Type': 'application/json', 'X-Secret': os.environ.get('TELEGRAM_SECRET', '')})
+    urllib.request.urlopen(req, timeout=10)
+    print('ok')
+except Exception as e:
+    print(f'error: {e}')
+") || true
+      if [ "$PREF_RESULT" = "ok" ]; then
+        send_msg "$CHAT_ID" "✅ 已設定 $PREF_KEY = $PREF_VAL"
+      else
+        send_error "設定失敗: $PREF_RESULT"
+      fi
     else
       send_error "此功能需要 CALLBACK_URL"
     fi
