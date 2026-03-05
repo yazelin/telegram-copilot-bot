@@ -114,6 +114,7 @@ Run scripts in order:
    - `.github/skills/issue-workflow/SKILL.md` — read from `.github/templates/skills/issue-workflow-SKILL.md`
    - `.github/skills/code-standards/SKILL.md` — read from `.github/templates/skills/code-standards-SKILL.md`
    - `.github/skills/testing/SKILL.md` — read from `.github/templates/skills/testing-SKILL.md`
+   - `.github/skills/frontend-design/SKILL.md` — read from `.github/templates/skills/frontend-design-SKILL.md` (if project has HTML/CSS frontend)
    - `.github/skills/deploy-pages/SKILL.md` — read from `.github/templates/skills/deploy-pages-SKILL.md` (if using GitHub Pages)
    - App-specific source files (index.html, styles.css, etc.)
 3. `python .github/scripts/setup_repo.py` with ALL files above as JSON
