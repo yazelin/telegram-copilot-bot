@@ -204,7 +204,7 @@ async function handleCallback(request, env) {
     return jsonResponse({ error: "Bad Request" }, 400);
   }
 
-  const { type, chat_id, text, timestamp, repo, command, description } = body;
+  const { type, chat_id, text, timestamp, repo, command, description, prefs } = body;
 
   if (type === "bot_reply" && chat_id && text) {
     await appendHistory(env.BOT_MEMORY, chat_id, {
@@ -221,6 +221,12 @@ async function handleCallback(request, env) {
       chatId: chat_id || "",
       description: description || "",
     }));
+  }
+
+  if (type === "set_prefs" && chat_id && prefs) {
+    const existing = await getPrefs(env.BOT_MEMORY, chat_id);
+    const merged = { ...existing, ...prefs };
+    await env.BOT_MEMORY.put(`chat:${chat_id}:prefs`, JSON.stringify(merged));
   }
 
   return jsonResponse({ ok: true });
