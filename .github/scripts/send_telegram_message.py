@@ -3,7 +3,7 @@
 Usage: python send_telegram_message.py <chat_id> <text>
 Env: TELEGRAM_BOT_TOKEN
 """
-import json, os, sys, urllib.request
+import json, os, sys, urllib.request, subprocess
 
 def main():
     if len(sys.argv) < 3:
@@ -23,18 +23,18 @@ def main():
 def _post_callback(chat_id, text):
     callback_url = os.environ.get("CALLBACK_URL", "")
     secret = os.environ.get("CALLBACK_TOKEN", "")
-    print(f"::warning::CB url_len={len(callback_url)} token_len={len(secret)} token_first8={secret[:8]}", file=sys.stderr)
-    if not callback_url:
+    if not callback_url or not secret:
         return
     try:
         from datetime import datetime, timezone
         payload = json.dumps({"type": "bot_reply", "chat_id": chat_id,
-            "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}).encode()
-        req = urllib.request.Request(callback_url, data=payload,
-            headers={"Content-Type": "application/json", "X-Secret": secret})
-        urllib.request.urlopen(req, timeout=5)
-    except Exception as e:
-        print(f"::warning::Callback failed: {e}", file=sys.stderr)
+            "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()})
+        subprocess.run(["curl", "-s", "-X", "POST", callback_url,
+            "-H", "Content-Type: application/json",
+            "-H", f"X-Secret: {secret}",
+            "-d", payload], timeout=10, capture_output=True)
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()
