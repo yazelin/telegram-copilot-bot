@@ -136,13 +136,21 @@ $MESSAGE" || true
     OPT_RESULT=$(gemini_chat optimize_draw_prompt "$DESCRIPTION") || true
     OPT_OK=$(printf '%s' "$OPT_RESULT" | json_field ok False || echo "False")
 
+    OPTIMIZED=""
     if [ "$OPT_OK" = "True" ]; then
-      PROMPT=$(printf '%s' "$OPT_RESULT" | json_field text "" || echo "")
+      OPTIMIZED=$(printf '%s' "$OPT_RESULT" | json_field text "" || echo "")
     fi
     # Fallback: use original description
-    if [ -z "${PROMPT:-}" ]; then
+    if [ -n "$OPTIMIZED" ]; then
+      PROMPT="$OPTIMIZED"
+    else
       PROMPT="$DESCRIPTION"
     fi
+
+    echo "::group::Draw prompt"
+    echo "Original: $DESCRIPTION"
+    echo "Optimized: ${OPTIMIZED:-（fallback to original）}"
+    echo "::endgroup::"
 
     # Generate image
     IMG_RESULT=$(generate_image "$PROMPT") || true
@@ -152,7 +160,11 @@ $MESSAGE" || true
       IMG_PATH=$(printf '%s' "$IMG_RESULT" | json_field file_path "" || echo "")
       IMG_MODEL=$(printf '%s' "$IMG_RESULT" | json_field model "unknown" || echo "unknown")
       CAPTION="$DESCRIPTION
-🤖 Model: $IMG_MODEL"
+🤖 $IMG_MODEL"
+      if [ -n "$OPTIMIZED" ]; then
+        CAPTION="$CAPTION
+📝 $OPTIMIZED"
+      fi
       send_photo "$CHAT_ID" "$IMG_PATH" "$CAPTION" || send_error "圖片傳送失敗"
     else
       ERROR=$(printf '%s' "$IMG_RESULT" | json_field error "圖片生成失敗" || echo "圖片生成失敗")
