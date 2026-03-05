@@ -40,7 +40,7 @@ case "$TEXT" in
   /build\ *)
     REPO="${TEXT#/build }"
     REPO="${REPO#"${REPO%%[![:space:]]*}"}"
-    RESULT=$(trigger_wf "$REPO" "implement.yml" 2>&1) || true
+    RESULT=$(trigger_wf "$REPO" "implement.yml") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
     if [ "$OK" = "True" ]; then
       send_msg "$CHAT_ID" "🚀 已觸發 $REPO 開發流程，可到 https://github.com/$REPO/actions 查看進度"
@@ -93,7 +93,7 @@ $MESSAGE" || true
     URL="${TEXT#/download }"
     URL="${URL#"${URL%%[![:space:]]*}"}"
 
-    RESULT=$(download_video "$URL" 2>&1) || true
+    RESULT=$(download_video "$URL") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
 
     if [ "$OK" != "True" ]; then
@@ -133,7 +133,7 @@ $MESSAGE" || true
     send_msg "$CHAT_ID" "🎨 正在生成圖片，請稍候..." || true
 
     # Optimize prompt with Gemini
-    OPT_RESULT=$(gemini_chat optimize_draw_prompt "$DESCRIPTION" 2>&1) || true
+    OPT_RESULT=$(gemini_chat optimize_draw_prompt "$DESCRIPTION") || true
     OPT_OK=$(printf '%s' "$OPT_RESULT" | json_field ok False || echo "False")
 
     if [ "$OPT_OK" = "True" ]; then
@@ -145,7 +145,7 @@ $MESSAGE" || true
     fi
 
     # Generate image
-    IMG_RESULT=$(generate_image "$PROMPT" 2>&1) || true
+    IMG_RESULT=$(generate_image "$PROMPT") || true
     IMG_OK=$(printf '%s' "$IMG_RESULT" | json_field ok False || echo "False")
 
     if [ "$IMG_OK" = "True" ]; then
@@ -167,7 +167,7 @@ $MESSAGE" || true
     INPUT="${TEXT#/translate }"
     INPUT="${INPUT#"${INPUT%%[![:space:]]*}"}"
 
-    RESULT=$(gemini_chat translate "$INPUT" 2>&1) || true
+    RESULT=$(gemini_chat translate "$INPUT") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
 
     if [ "$OK" = "True" ]; then
@@ -199,7 +199,7 @@ $TRANSLATED"
 
   *)
     # No command prefix: try Gemini chat, fallback to Copilot
-    RESULT=$(gemini_chat chat "$TEXT" 2>&1) || true
+    RESULT=$(gemini_chat chat "$TEXT") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
 
     if [ "$OK" = "True" ]; then
