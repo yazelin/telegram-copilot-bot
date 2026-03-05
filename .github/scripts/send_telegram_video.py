@@ -39,6 +39,22 @@ def main():
     resp = urllib.request.urlopen(req, timeout=120)
     data = json.loads(resp.read())
     print(json.dumps({"ok": True, "message_id": data.get("result", {}).get("message_id")}))
+    _post_callback(chat_id, caption or "[video]")
+
+def _post_callback(chat_id, text):
+    callback_url = os.environ.get("CALLBACK_URL", "")
+    secret = os.environ.get("TELEGRAM_SECRET", "")
+    if not callback_url:
+        return
+    try:
+        from datetime import datetime, timezone
+        payload = json.dumps({"type": "bot_reply", "chat_id": chat_id,
+            "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}).encode()
+        req = urllib.request.Request(callback_url, data=payload,
+            headers={"Content-Type": "application/json", "X-Secret": secret})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()

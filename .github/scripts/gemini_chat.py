@@ -39,11 +39,18 @@ MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 def main():
     if len(sys.argv) < 3:
-        print(json.dumps({"ok": False, "error": "Usage: gemini_chat.py <mode> <text>"}))
+        print(json.dumps({"ok": False, "error": "Usage: gemini_chat.py <mode> <text> [--history <json>]"}))
         sys.exit(1)
 
     mode = sys.argv[1]
     text = sys.argv[2]
+
+    # Parse optional --history flag
+    history_json = ""
+    if "--history" in sys.argv:
+        idx = sys.argv.index("--history")
+        if idx + 1 < len(sys.argv):
+            history_json = sys.argv[idx + 1]
 
     if mode not in SYSTEM_PROMPTS:
         print(json.dumps({"ok": False, "error": f"Unknown mode: {mode}. Valid: {', '.join(SYSTEM_PROMPTS)}"}))
@@ -56,10 +63,20 @@ def main():
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
+    # Build contents with history for chat mode
+    contents = []
+    if mode == "chat" and history_json:
+        try:
+            history = json.loads(history_json)
+            for entry in history:
+                role = "user" if entry.get("role") == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": entry.get("text", "")}]})
+        except (json.JSONDecodeError, TypeError):
+            pass
+    contents.append({"role": "user", "parts": [{"text": text}]})
+
     payload = {
-        "contents": [
-            {"role": "user", "parts": [{"text": text}]}
-        ],
+        "contents": contents,
         "systemInstruction": {
             "parts": [{"text": SYSTEM_PROMPTS[mode]}]
         },

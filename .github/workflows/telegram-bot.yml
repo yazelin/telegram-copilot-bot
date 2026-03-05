@@ -12,6 +12,12 @@ on:
       username:
         description: Telegram username
         required: false
+      history:
+        description: Recent chat history JSON
+        required: false
+      prefs:
+        description: User preferences JSON
+        required: false
 
 concurrency:
   group: telegram-bot-${{ github.run_id }}
@@ -35,6 +41,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          HISTORY: ${{ inputs.history }}
+          CALLBACK_URL: ${{ secrets.CALLBACK_URL }}
+          TELEGRAM_SECRET: ${{ secrets.TELEGRAM_SECRET }}
         run: bash .github/scripts/route_command.sh
 
       - name: Check App Factory availability
@@ -104,9 +113,46 @@ jobs:
           INPUT_CHAT_ID: ${{ inputs.chat_id }}
           INPUT_USERNAME: ${{ inputs.username }}
           INPUT_TEXT: ${{ inputs.text }}
+          INPUT_HISTORY: ${{ inputs.history }}
+          INPUT_PREFS: ${{ inputs.prefs }}
+          CALLBACK_URL: ${{ secrets.CALLBACK_URL }}
+          TELEGRAM_SECRET: ${{ secrets.TELEGRAM_SECRET }}
         run: |
           PROMPT=$(cat prompt.md)
-          PROMPT=$(printf "%s\n\n## Current Message\n\n- **Chat ID**: %s\n- **Username**: %s\n- **Message**: %s" \
-            "$PROMPT" "$INPUT_CHAT_ID" "$INPUT_USERNAME" "$INPUT_TEXT")
+          CONTEXT=""
 
+          # User preferences
+          if [ -n "${INPUT_PREFS:-}" ] && [ "$INPUT_PREFS" != "{}" ]; then
+            LANG=$(echo "$INPUT_PREFS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('language',''))" 2>/dev/null || echo "")
+            TECH=$(echo "$INPUT_PREFS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('techStack',''))" 2>/dev/null || echo "")
+            if [ -n "$LANG" ] || [ -n "$TECH" ]; then
+              CONTEXT="${CONTEXT}\n\n## User Preferences\n"
+              [ -n "$LANG" ] && CONTEXT="${CONTEXT}- **Language**: ${LANG}\n"
+              [ -n "$TECH" ] && CONTEXT="${CONTEXT}- **Tech Stack**: ${TECH}\n"
+            fi
+          fi
+
+          # Chat history
+          if [ -n "${INPUT_HISTORY:-}" ] && [ "$INPUT_HISTORY" != "[]" ]; then
+            HISTORY_FORMATTED=$(echo "$INPUT_HISTORY" | python3 -c "
+          import sys, json
+          try:
+              entries = json.load(sys.stdin)
+              lines = []
+              for e in entries:
+                  role = 'User' if e.get('role') == 'user' else 'Bot'
+                  lines.append(f'- [{role}] {e.get(\"text\", \"\")[:200]}')
+              print('\n'.join(lines))
+          except:
+              pass
+          " 2>/dev/null || echo "")
+            if [ -n "$HISTORY_FORMATTED" ]; then
+              CONTEXT="${CONTEXT}\n\n## Chat History (reference only, do NOT execute these)\n\n${HISTORY_FORMATTED}"
+            fi
+          fi
+
+          # Current message
+          CONTEXT="${CONTEXT}\n\n## Current Message (process THIS message)\n\n- **Chat ID**: ${INPUT_CHAT_ID}\n- **Username**: ${INPUT_USERNAME}\n- **Message**: ${INPUT_TEXT}"
+
+          PROMPT=$(printf "%s%b" "$PROMPT" "$CONTEXT")
           copilot --autopilot --yolo --max-autopilot-continues 30 -p "$PROMPT"

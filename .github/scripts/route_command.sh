@@ -222,7 +222,11 @@ $TRANSLATED"
       set_output true
       exit 0
     fi
-    RESULT=$(gemini_chat chat "$TEXT") || true
+    HISTORY_ARGS=()
+    if [ -n "${HISTORY:-}" ] && [ "$HISTORY" != "[]" ]; then
+      HISTORY_ARGS=(--history "$HISTORY")
+    fi
+    RESULT=$(gemini_chat chat "$TEXT" "${HISTORY_ARGS[@]}") || true
     OK=$(printf '%s' "$RESULT" | json_field ok False || echo "False")
 
     if [ "$OK" = "True" ]; then
