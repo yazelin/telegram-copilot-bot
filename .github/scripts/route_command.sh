@@ -206,67 +206,6 @@ $TRANSLATED"
     set_output false
     ;;
 
-  /setpref\ *)
-    PREF_ARGS="${TEXT#/setpref }"
-    PREF_ARGS="${PREF_ARGS#"${PREF_ARGS%%[![:space:]]*}"}"
-    PREF_KEY=$(printf '%s' "$PREF_ARGS" | cut -d' ' -f1)
-    PREF_VAL=$(printf '%s' "$PREF_ARGS" | cut -d' ' -f2-)
-    PREF_VAL="${PREF_VAL#"${PREF_VAL%%[![:space:]]*}"}"
-
-    if [ -z "$PREF_KEY" ] || [ -z "$PREF_VAL" ]; then
-      send_error "用法: /setpref <key> <value>
-可用 key: lang, tech
-範例: /setpref lang 繁體中文
-範例: /setpref tech React, Node.js"
-      set_output false
-      exit 0
-    fi
-
-    case "$PREF_KEY" in
-      lang)  JSON_KEY="language" ;;
-      tech)  JSON_KEY="techStack" ;;
-      *)
-        send_error "不支援的 key: $PREF_KEY (可用: lang, tech)"
-        set_output false
-        exit 0
-        ;;
-    esac
-
-    if [ -n "${CALLBACK_URL:-}" ]; then
-      PREF_RESULT=$(PREF_JSON_KEY="$JSON_KEY" PREF_JSON_VAL="$PREF_VAL" PREF_CHAT_ID="$CHAT_ID" python3 -c "
-import json, urllib.request, os
-try:
-    payload = json.dumps({
-        'type': 'set_prefs',
-        'chat_id': os.environ['PREF_CHAT_ID'],
-        'prefs': {os.environ['PREF_JSON_KEY']: os.environ['PREF_JSON_VAL']}
-    }).encode()
-    req = urllib.request.Request(os.environ['CALLBACK_URL'], data=payload,
-        headers={'Content-Type': 'application/json', 'X-Secret': os.environ.get('TELEGRAM_SECRET', '')})
-    urllib.request.urlopen(req, timeout=10)
-    print('ok')
-except Exception as e:
-    print(f'error: {e}')
-") || true
-      if [ "$PREF_RESULT" = "ok" ]; then
-        send_msg "$CHAT_ID" "✅ 已設定 $PREF_KEY = $PREF_VAL"
-      else
-        send_error "設定失敗: $PREF_RESULT"
-      fi
-    else
-      send_error "此功能需要 CALLBACK_URL"
-    fi
-    set_output false
-    ;;
-
-  /setpref)
-    send_error "用法: /setpref <key> <value>
-可用 key: lang, tech
-範例: /setpref lang 繁體中文
-範例: /setpref tech React, Node.js"
-    set_output false
-    ;;
-
   /app\ *|/issue\ *|/research\ *)
     # These need Copilot CLI
     set_output true

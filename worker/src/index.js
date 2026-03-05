@@ -136,6 +136,16 @@ export default {
   },
 };
 
+// --- Telegram Send Helper ---
+
+async function sendTelegram(token, chatId, text) {
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
 // --- Webhook Handler ---
 
 async function handleWebhook(request, env, ctx) {
@@ -166,6 +176,25 @@ async function handleWebhook(request, env, ctx) {
   }
 
   ctx.waitUntil((async () => {
+    const text = msg.text.trim();
+
+    // Handle /setpref directly in Worker (no GitHub dispatch needed)
+    const prefMatch = text.match(/^\/setpref\s+(lang|tech)\s+(.+)/i);
+    if (prefMatch) {
+      const keyMap = { lang: "language", tech: "techStack" };
+      const jsonKey = keyMap[prefMatch[1].toLowerCase()];
+      const value = prefMatch[2].trim();
+      const existing = await getPrefs(env.BOT_MEMORY, chatId);
+      await env.BOT_MEMORY.put(`chat:${chatId}:prefs`, JSON.stringify({ ...existing, [jsonKey]: value }));
+      await sendTelegram(env.TELEGRAM_BOT_TOKEN, chatId, `✅ 已設定 ${prefMatch[1]} = ${value}`);
+      return;
+    }
+    if (text === "/setpref") {
+      await sendTelegram(env.TELEGRAM_BOT_TOKEN, chatId,
+        "用法: /setpref <key> <value>\n可用 key: lang, tech\n範例: /setpref lang 繁體中文\n範例: /setpref tech React, Node.js");
+      return;
+    }
+
     // Store user message in KV
     await appendHistory(env.BOT_MEMORY, chatId, {
       role: "user",
