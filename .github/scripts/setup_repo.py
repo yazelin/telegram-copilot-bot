@@ -37,10 +37,18 @@ def main():
         if result.returncode != 0:
             print(json.dumps({"ok": False, "error": f"Push failed: {result.stderr.strip()[-300:]}"}))
             sys.exit(1)
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repo}/pages", "-X", "POST", "-f", "build_type=legacy", "-f", f"source[branch]={default_branch}", "-f", "source[path]=/"],
-        capture_output=True, text=True)
-    print(json.dumps({"ok": True, "files_pushed": len(files), "pages_enabled": result.returncode == 0}))
+    # Enable GitHub Pages with retry
+    pages_enabled = False
+    for attempt in range(1, 4):
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pages", "-X", "POST", "-f", "build_type=legacy", "-f", f"source[branch]={default_branch}", "-f", "source[path]=/"],
+            capture_output=True, text=True)
+        if result.returncode == 0:
+            pages_enabled = True
+            break
+        if attempt < 3:
+            time.sleep(5)
+    print(json.dumps({"ok": True, "files_pushed": len(files), "pages_enabled": pages_enabled}))
 
 if __name__ == "__main__":
     main()
