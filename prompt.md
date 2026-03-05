@@ -161,7 +161,12 @@ Run scripts in order:
 3. `python .github/scripts/setup_repo.py` with ALL files above as JSON
 4. `python .github/scripts/create_issues.py` with planned issues
 5. `python .github/scripts/setup_secrets.py` with `[]` (auto-adds COPILOT_GITHUB_TOKEN, COPILOT_PAT, NOTIFY_TOKEN)
-6. `python .github/scripts/send_telegram_message.py` with summary including repo URL
+6. Verify GitHub Pages is enabled (for web app projects):
+   ```bash
+   gh api repos/<owner/name>/pages 2>/dev/null || gh api repos/<owner/name>/pages -X POST -f "source[branch]=main" -f "source[path]=/"
+   ```
+   If setup_repo.py didn't enable it, this ensures Pages is active.
+7. `python .github/scripts/send_telegram_message.py` with summary including repo URL and Pages URL (e.g. `https://aw-apps.github.io/<repo-name>/`)
 
 **IMPORTANT:** You MUST include the workflow files (implement.yml, review.yml) and skill files. Without them, `/build` cannot trigger automated development.
 
