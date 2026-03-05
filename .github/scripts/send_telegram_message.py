@@ -23,6 +23,7 @@ def main():
 def _post_callback(chat_id, text):
     callback_url = os.environ.get("CALLBACK_URL", "")
     secret = os.environ.get("CALLBACK_TOKEN", "")
+    print(f"::debug::callback_url={callback_url[:30]}... secret_len={len(secret)} secret_first8={secret[:8]}", file=sys.stderr)
     if not callback_url:
         return
     try:
