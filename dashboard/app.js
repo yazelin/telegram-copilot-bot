@@ -6,16 +6,23 @@
 
 const CONFIG_KEY = 'tg-copilot-dashboard-config';
 
+// Auto-detect defaults from repo metadata
+const DEFAULTS = {
+  apiUrl: 'https://telegram-copilot-relay.yazelinj303.workers.dev',
+  org: 'aw-apps',
+  chatId: '850654509',
+};
+
 function getConfig() {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return null;
-    const cfg = JSON.parse(raw);
-    if (!cfg.apiUrl || !cfg.org || !cfg.chatId) return null;
-    return cfg;
-  } catch {
-    return null;
-  }
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      if (cfg.apiUrl && cfg.org && cfg.chatId) return cfg;
+    }
+  } catch {}
+  // Return defaults on first visit
+  return { ...DEFAULTS };
 }
 
 function saveConfig(config) {
@@ -429,13 +436,8 @@ function init() {
   // Refresh
   document.getElementById('btn-refresh').addEventListener('click', refresh);
 
-  // If no config, auto-open settings
-  const config = getConfig();
-  if (!config) {
-    openSettings();
-  } else {
-    refresh();
-  }
+  // Always have valid config (defaults or saved), just refresh
+  refresh();
 }
 
 // Kick off
