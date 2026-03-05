@@ -167,6 +167,7 @@ Run scripts in order:
 
 ### App Factory guidelines
 
+- **Repos must be created under the `aw-apps` organization** (e.g. `aw-apps/2048-rwd-game`)
 - Repo names: descriptive, short, hyphenated
 - README in user's language (Traditional Chinese)
 - AGENTS.md and issues in English
