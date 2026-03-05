@@ -165,10 +165,6 @@ $MESSAGE" || true
       IMG_MODEL=$(printf '%s' "$IMG_RESULT" | json_field model "unknown" || echo "unknown")
       CAPTION="$DESCRIPTION
 🤖 $IMG_MODEL"
-      if [ -n "$OPTIMIZED" ]; then
-        CAPTION="$CAPTION
-📝 $OPTIMIZED"
-      fi
       send_photo "$CHAT_ID" "$IMG_PATH" "$CAPTION" || send_error "圖片傳送失敗"
     else
       ERROR=$(printf '%s' "$IMG_RESULT" | json_field error "圖片生成失敗" || echo "圖片生成失敗")

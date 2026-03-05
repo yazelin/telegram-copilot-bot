@@ -24,10 +24,11 @@
 
 | 版本 | Tag | 說明 |
 |------|-----|------|
-| v2.0（目前） | `feat/shell-routing` | Shell 前處理 + Gemini Flash API，大幅減少 Premium Request 消耗 |
+| v3.0（開發中） | — | 記憶功能 + Dashboard |
+| v2.0（目前） | `v2.0` | Shell 前處理 + Gemini Flash API + 一鍵設定 + Graceful degradation |
 | v1.0 | `v1.0-before-shell-routing` | 所有訊息都經過 Copilot CLI 處理 |
 
-> **v2.0 改動重點**：新增 `route_command.sh` 和 `gemini_chat.py`，簡單命令（`/build`、`/msg`、`/download`、`/draw`、`/translate`、一般聊天）由 shell 腳本 + Gemini Flash API 直接處理，不消耗 Premium Request。只有 `/app`、`/issue`、`/research` 和 Gemini 無法處理的訊息才呼叫 Copilot CLI。
+> **v2.0 改動重點**：新增 `route_command.sh` 和 `gemini_chat.py`，簡單命令（`/build`、`/msg`、`/download`、`/draw`、`/translate`、一般聊天）由 shell 腳本 + Gemini Flash API 直接處理，不消耗 Premium Request。只有 `/app`、`/issue`、`/research` 和 Gemini 無法處理的訊息才呼叫 Copilot CLI。新增 `setup.sh` 一鍵安裝精靈、Secret 缺失時的友善提示（Graceful degradation）、動態 repository owner 支援。
 
 ## 運作方式
 
