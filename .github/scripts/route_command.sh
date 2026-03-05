@@ -27,6 +27,23 @@ send_error() {
   send_msg "$CHAT_ID" "❌ $1" || true
 }
 
+# Post bot reply to callback for history storage
+post_callback() {
+  if [ -z "${CALLBACK_URL:-}" ] || [ -z "${CALLBACK_TOKEN:-}" ]; then
+    return 0
+  fi
+  local payload
+  payload=$(CB_TEXT="$1" python3 -c "
+import json,os
+from datetime import datetime,timezone
+print(json.dumps({'type':'bot_reply','chat_id':os.environ.get('CHAT_ID',''),'text':os.environ['CB_TEXT'][:500],'timestamp':datetime.now(timezone.utc).isoformat()}))
+")
+  curl -s -X POST "$CALLBACK_URL" \
+    -H "Content-Type: application/json" \
+    -H "X-Secret: $CALLBACK_TOKEN" \
+    -d "$payload" || true
+}
+
 # Extract a field from JSON on stdin: json_field <key> [default]
 json_field() {
   python3 -c "import sys,json; print(json.load(sys.stdin).get('$1','${2:-}'))" 2>/dev/null
@@ -235,6 +252,7 @@ $TRANSLATED"
         set_output true
       else
         send_msg "$CHAT_ID" "$REPLY"
+        post_callback "$REPLY"
         set_output false
       fi
     else
