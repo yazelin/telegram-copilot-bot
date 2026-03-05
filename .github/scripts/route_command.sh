@@ -25,6 +25,7 @@ set_output() {
 
 send_error() {
   send_msg "$CHAT_ID" "❌ $1" || true
+  post_callback "❌ $1"
 }
 
 # Post bot reply to callback for history storage
@@ -137,7 +138,9 @@ $MESSAGE" || true
       send_video "$CHAT_ID" "$FILE_PATH" "$TITLE" || send_error "影片傳送失敗"
       post_callback "[影片] $TITLE"
     else
-      send_msg "$CHAT_ID" "⚠️ 影片太大 ($(( FILESIZE / 1048576 ))MB)，超過 Telegram 50MB 限制"
+      MSG="⚠️ 影片太大 ($(( FILESIZE / 1048576 ))MB)，超過 Telegram 50MB 限制"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
     fi
     set_output false
     ;;
@@ -149,7 +152,9 @@ $MESSAGE" || true
 
   /draw\ *)
     if [ -z "${GEMINI_API_KEY:-}" ]; then
-      send_msg "$CHAT_ID" "⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      MSG="⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
       set_output false; exit 0
     fi
     DESCRIPTION="${TEXT#/draw }"
@@ -203,7 +208,9 @@ $MESSAGE" || true
 
   /translate\ *)
     if [ -z "${GEMINI_API_KEY:-}" ]; then
-      send_msg "$CHAT_ID" "⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      MSG="⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
       set_output false; exit 0
     fi
     INPUT="${TEXT#/translate }"
