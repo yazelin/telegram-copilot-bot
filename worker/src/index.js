@@ -222,7 +222,7 @@ async function handleWebhook(request, env, ctx) {
 
 async function handleCallback(request, env) {
   const secret = request.headers.get("X-Secret");
-  if (secret !== env.TELEGRAM_SECRET) {
+  if (secret !== env.CALLBACK_TOKEN) {
     return jsonResponse({ error: "Unauthorized" }, 403);
   }
 

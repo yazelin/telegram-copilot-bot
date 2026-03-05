@@ -22,7 +22,7 @@ def main():
 
 def _post_callback(chat_id, text):
     callback_url = os.environ.get("CALLBACK_URL", "")
-    secret = os.environ.get("TELEGRAM_SECRET", "")
+    secret = os.environ.get("CALLBACK_TOKEN", "")
     if not callback_url:
         return
     try:

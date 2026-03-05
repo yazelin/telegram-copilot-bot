@@ -43,7 +43,7 @@ jobs:
           GH_TOKEN: ${{ secrets.FACTORY_PAT }}
           HISTORY: ${{ inputs.history }}
           CALLBACK_URL: ${{ secrets.CALLBACK_URL }}
-          TELEGRAM_SECRET: ${{ secrets.TELEGRAM_SECRET }}
+          CALLBACK_TOKEN: ${{ secrets.CALLBACK_TOKEN }}
         run: bash .github/scripts/route_command.sh
 
       - name: Check App Factory availability
@@ -116,7 +116,7 @@ jobs:
           INPUT_HISTORY: ${{ inputs.history }}
           INPUT_PREFS: ${{ inputs.prefs }}
           CALLBACK_URL: ${{ secrets.CALLBACK_URL }}
-          TELEGRAM_SECRET: ${{ secrets.TELEGRAM_SECRET }}
+          CALLBACK_TOKEN: ${{ secrets.CALLBACK_TOKEN }}
         run: |
           PROMPT=$(cat prompt.md)
           CONTEXT=""
