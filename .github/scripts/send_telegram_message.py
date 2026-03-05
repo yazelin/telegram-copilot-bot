@@ -32,8 +32,8 @@ def _post_callback(chat_id, text):
         req = urllib.request.Request(callback_url, data=payload,
             headers={"Content-Type": "application/json", "X-Secret": secret})
         urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"::warning::Callback failed: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
