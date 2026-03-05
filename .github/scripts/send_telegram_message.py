@@ -3,7 +3,7 @@
 Usage: python send_telegram_message.py <chat_id> <text>
 Env: TELEGRAM_BOT_TOKEN
 """
-import json, os, sys, urllib.request, subprocess
+import json, os, sys, urllib.request
 
 def main():
     if len(sys.argv) < 3:
@@ -18,23 +18,6 @@ def main():
     resp = urllib.request.urlopen(req)
     data = json.loads(resp.read())
     print(json.dumps({"ok": True, "message_id": data.get("result", {}).get("message_id")}))
-    _post_callback(chat_id, text)
-
-def _post_callback(chat_id, text):
-    callback_url = os.environ.get("CALLBACK_URL", "")
-    secret = os.environ.get("CALLBACK_TOKEN", "")
-    if not callback_url or not secret:
-        return
-    try:
-        from datetime import datetime, timezone
-        payload = json.dumps({"type": "bot_reply", "chat_id": chat_id,
-            "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()})
-        subprocess.run(["curl", "-s", "-X", "POST", callback_url,
-            "-H", "Content-Type: application/json",
-            "-H", f"X-Secret: {secret}",
-            "-d", payload], timeout=10, capture_output=True)
-    except Exception:
-        pass
 
 if __name__ == "__main__":
     main()

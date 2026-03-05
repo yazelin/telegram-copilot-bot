@@ -4,7 +4,9 @@ const MAX_HISTORY = 20;
 const MAX_HISTORY_JSON_LENGTH = 2000;
 
 async function appendHistory(kv, chatId, entry) {
-  const key = `chat:${chatId}:history`;
+  // Use separate keys for user and bot to avoid read-modify-write race
+  const suffix = entry.role === "bot" ? "bot" : "user";
+  const key = `chat:${chatId}:${suffix}`;
   let history = [];
   try {
     const existing = await kv.get(key, "json");
@@ -19,13 +21,23 @@ async function appendHistory(kv, chatId, entry) {
 }
 
 async function getHistory(kv, chatId) {
-  const key = `chat:${chatId}:history`;
+  // Merge user and bot histories, sort by timestamp
+  let user = [], bot = [];
   try {
-    const history = await kv.get(key, "json");
-    return Array.isArray(history) ? history : [];
-  } catch {
-    return [];
-  }
+    const u = await kv.get(`chat:${chatId}:user`, "json");
+    if (Array.isArray(u)) user = u;
+  } catch {}
+  try {
+    const b = await kv.get(`chat:${chatId}:bot`, "json");
+    if (Array.isArray(b)) bot = b;
+  } catch {}
+  const merged = [...user, ...bot].sort((a, b) =>
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+  // Trim to max
+  return merged.length > MAX_HISTORY * 2
+    ? merged.slice(-MAX_HISTORY * 2)
+    : merged;
 }
 
 function truncateHistoryForDispatch(history) {
