@@ -1,0 +1,204 @@
+name: Implement Issue
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: copilot-implement
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    # Guard: only run for relevant events
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.head.ref, 'issue-')) ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'changes_requested' &&
+       startsWith(github.event.pull_request.head.ref, 'issue-'))
+    steps:
+      - name: Validate secrets
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+        run: |
+          missing=0
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "::error::Missing secret: COPILOT_GITHUB_TOKEN"
+            missing=1
+          fi
+          if [ -z "$COPILOT_PAT" ]; then
+            echo "::error::Missing secret: COPILOT_PAT"
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.COPILOT_PAT }}
+
+      - name: Check state
+        id: state
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_REPO: ${{ github.repository }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          NOTIFY_REPO: PLACEHOLDER_NOTIFY_REPO
+          NOTIFY_CHAT_ID: PLACEHOLDER_CHAT_ID
+        run: |
+          echo "::group::Trigger context"
+          echo "Event: ${{ github.event_name }}"
+          echo "Repository: ${GH_REPO}"
+          echo "::endgroup::"
+
+          # CASE A: Open PR with changes requested?
+          echo "::group::Check for open PRs"
+          PR_JSON=$(gh pr list --state open --json number,headRefName,reviewDecision --jq '.[0]')
+          echo "PR query result: ${PR_JSON:-none}"
+          echo "::endgroup::"
+
+          if [ -n "$PR_JSON" ] && [ "$PR_JSON" != "null" ]; then
+            PR_NUM=$(echo "$PR_JSON" | jq -r '.number')
+            BRANCH=$(echo "$PR_JSON" | jq -r '.headRefName')
+            DECISION=$(echo "$PR_JSON" | jq -r '.reviewDecision')
+            if [ "$DECISION" = "CHANGES_REQUESTED" ]; then
+              echo "action=fix-pr" >> "$GITHUB_OUTPUT"
+              echo "pr_number=${PR_NUM}" >> "$GITHUB_OUTPUT"
+              echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+              echo "::notice::Action: fix-pr (PR #${PR_NUM} on ${BRANCH})"
+              exit 0
+            else
+              echo "action=skip" >> "$GITHUB_OUTPUT"
+              echo "::notice::Action: skip (PR #${PR_NUM} decision: ${DECISION})"
+              exit 0
+            fi
+          fi
+
+          # CASE B: Open issues with copilot-task label?
+          echo "::group::Check for open issues"
+          ISSUE_JSON=$(gh issue list --state open --label copilot-task --json number,title,labels \
+            --jq '[.[] | select(.labels | map(.name) | (contains(["agent-stuck"]) or contains(["needs-human-review"])) | not)] | sort_by(.number) | .[0]')
+          echo "Issue query result: ${ISSUE_JSON:-none}"
+          echo "::endgroup::"
+
+          if [ -n "$ISSUE_JSON" ] && [ "$ISSUE_JSON" != "null" ]; then
+            ISSUE_NUM=$(echo "$ISSUE_JSON" | jq -r '.number')
+            ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+            echo "action=implement" >> "$GITHUB_OUTPUT"
+            echo "issue_number=${ISSUE_NUM}" >> "$GITHUB_OUTPUT"
+            echo "issue_title=${ISSUE_TITLE}" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: implement (Issue #${ISSUE_NUM}: ${ISSUE_TITLE})"
+            exit 0
+          fi
+
+          # CASE C: All done
+          echo "action=done" >> "$GITHUB_OUTPUT"
+          echo "::notice::Action: done (no open PRs or actionable issues)"
+          GH_TOKEN="${NOTIFY_TOKEN}" gh workflow run notify.yml --repo "${NOTIFY_REPO}" \
+            -f chat_id="${NOTIFY_CHAT_ID}" \
+            -f text="✅ ${GH_REPO} all issues completed!" || true
+
+      - name: Configure git
+        if: steps.state.outputs.action == 'fix-pr' || steps.state.outputs.action == 'implement'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout PR branch
+        if: steps.state.outputs.action == 'fix-pr'
+        run: git checkout ${{ steps.state.outputs.branch }}
+
+      - name: Create working branch
+        if: steps.state.outputs.action == 'implement'
+        run: git checkout -b issue-${{ steps.state.outputs.issue_number }}-impl
+
+      - name: Setup Node.js
+        if: steps.state.outputs.action == 'fix-pr' || steps.state.outputs.action == 'implement'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Copilot CLI
+        if: steps.state.outputs.action == 'fix-pr' || steps.state.outputs.action == 'implement'
+        run: npm install -g @github/copilot
+
+      - name: Fix PR
+        if: steps.state.outputs.action == 'fix-pr'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PR_NUM=${{ steps.state.outputs.pr_number }}
+
+          copilot --autopilot --yolo \
+            --max-autopilot-continues 30 \
+            -p "
+              You are an autonomous coding agent working on repository ${GH_REPO}.
+              Read AGENTS.md to understand the project spec and acceptance criteria.
+
+              PR #${PR_NUM} has changes requested by the reviewer.
+              You are already on the PR branch.
+              1. Read review comments: gh pr view ${PR_NUM} --comments
+              2. Read the linked issue for the Acceptance Criteria and Validation sections
+              3. Address ALL review comments with code changes
+              4. Re-verify using the Validation section
+              5. git add, commit, push
+            "
+
+      - name: Implement issue
+        if: steps.state.outputs.action == 'implement'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ISSUE_NUM=${{ steps.state.outputs.issue_number }}
+
+          copilot --autopilot --yolo \
+            --max-autopilot-continues 30 \
+            -p "
+              You are an autonomous coding agent working on repository ${GH_REPO}.
+              Read AGENTS.md to understand the project spec, tech stack, and Global Acceptance Criteria.
+
+              Implement issue #${ISSUE_NUM}:
+              1. Read the issue: gh issue view ${ISSUE_NUM}
+              2. The issue has these sections: Objective, Context, Approach, Files, Acceptance Criteria, Validation
+              3. Follow the Approach steps in order — commit after each step
+              4. Create/modify only the files listed in the Files section
+              5. After all steps, run these pre-push checks:
+                 - grep -rn 'from ['\''\"]\w' --include='*.js' --include='*.ts' to find bare module imports (must use relative or CDN URLs, not bare specifiers like 'three')
+                 - Fix any bare imports before pushing
+              6. Verify using the Validation section
+              7. Confirm each Acceptance Criteria checkbox is met
+              8. You are already on branch issue-${ISSUE_NUM}-impl
+              9. git add, commit, push
+              10. Create PR: gh pr create --title 'Implement #${ISSUE_NUM}' --body 'Closes #${ISSUE_NUM}'
+
+              If you cannot meet an acceptance criterion, explain why in the PR body.
+            "
+
+      - name: Handle stuck issue
+        if: failure() && steps.state.outputs.action == 'implement'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NOTIFY_REPO: PLACEHOLDER_NOTIFY_REPO
+          NOTIFY_CHAT_ID: PLACEHOLDER_CHAT_ID
+        run: |
+          ISSUE_NUM=${{ steps.state.outputs.issue_number }}
+          gh issue edit ${ISSUE_NUM} --repo ${GH_REPO} --add-label agent-stuck || true
+          GH_TOKEN="${NOTIFY_TOKEN}" gh workflow run notify.yml --repo "${NOTIFY_REPO}" \
+            -f chat_id="${NOTIFY_CHAT_ID}" \
+            -f text="⚠️ ${GH_REPO} issue #${ISSUE_NUM} is stuck" || true

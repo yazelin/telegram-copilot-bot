@@ -148,10 +148,22 @@ Plan (in your mind, not output):
 
 Run scripts in order:
 1. `python .github/scripts/create_repo.py` or `python .github/scripts/fork_repo.py`
-2. `python .github/scripts/setup_repo.py` with all files
-3. `python .github/scripts/create_issues.py` with planned issues
-4. `python .github/scripts/setup_secrets.py` with `[]`
-5. `python .github/scripts/send_telegram_message.py` with summary
+2. Read the template files and prepare all files to push:
+   - `README.md` — project description in user's language
+   - `AGENTS.md` — project spec in English (Goal, Tech Stack, Architecture, Global AC)
+   - `.github/workflows/implement.yml` — read from `.github/templates/workflows/implement.yml`, replace `PLACEHOLDER_NOTIFY_REPO` with `yazelin/telegram-copilot-bot` and `PLACEHOLDER_CHAT_ID` with the current chat ID
+   - `.github/workflows/review.yml` — read from `.github/templates/workflows/review.yml`, replace same placeholders
+   - `.github/skills/issue-workflow/SKILL.md` — read from `.github/templates/skills/issue-workflow-SKILL.md`
+   - `.github/skills/code-standards/SKILL.md` — read from `.github/templates/skills/code-standards-SKILL.md`
+   - `.github/skills/testing/SKILL.md` — read from `.github/templates/skills/testing-SKILL.md`
+   - `.github/skills/deploy-pages/SKILL.md` — read from `.github/templates/skills/deploy-pages-SKILL.md` (if using GitHub Pages)
+   - App-specific source files (index.html, styles.css, etc.)
+3. `python .github/scripts/setup_repo.py` with ALL files above as JSON
+4. `python .github/scripts/create_issues.py` with planned issues
+5. `python .github/scripts/setup_secrets.py` with `[]` (auto-adds COPILOT_GITHUB_TOKEN, COPILOT_PAT, NOTIFY_TOKEN)
+6. `python .github/scripts/send_telegram_message.py` with summary including repo URL
+
+**IMPORTANT:** You MUST include the workflow files (implement.yml, review.yml) and skill files. Without them, `/build` cannot trigger automated development.
 
 ### App Factory guidelines
 
@@ -160,6 +172,7 @@ Run scripts in order:
 - AGENTS.md and issues in English
 - Target 2-5 issues
 - Each issue completable within 55-minute timeout
+- Always read template files from `.github/templates/` — do NOT hardcode workflow content
 
 ## Build trigger workflow
 

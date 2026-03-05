@@ -1,0 +1,160 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: copilot-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: startsWith(github.head_ref, 'issue-')
+    steps:
+      - name: Validate secrets
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+        run: |
+          missing=0
+          if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
+            echo "::error::Missing secret: COPILOT_GITHUB_TOKEN"
+            missing=1
+          fi
+          if [ -z "$COPILOT_PAT" ]; then
+            echo "::error::Missing secret: COPILOT_PAT"
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || exit 1
+
+      - name: Count previous reviews
+        id: count
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          COUNT=$(gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews --jq 'length')
+          echo "review_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Review count for PR #${PR_NUM}: ${COUNT}"
+
+      - name: Bail if too many reviews
+        if: steps.count.outputs.review_count >= 3
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          NOTIFY_REPO: PLACEHOLDER_NOTIFY_REPO
+          NOTIFY_CHAT_ID: PLACEHOLDER_CHAT_ID
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          ISSUE_NUM=$(gh pr view ${PR_NUM} --json body --jq '.body' | grep -oP 'Closes #\K\d+' || echo "")
+          if [ -n "$ISSUE_NUM" ]; then
+            gh issue edit ${ISSUE_NUM} --add-label needs-human-review
+          fi
+          gh pr close ${PR_NUM} --comment "Closing: exceeded review limit (3), needs human intervention"
+          GH_TOKEN="${NOTIFY_TOKEN}" gh workflow run notify.yml --repo ${NOTIFY_REPO} \
+            -f chat_id="${NOTIFY_CHAT_ID}" \
+            -f text="⚠️ ${{ github.repository }} PR #${PR_NUM} failed review 3 times, needs human review" || true
+          echo "Bailed: too many reviews"
+
+      - name: Checkout
+        if: steps.count.outputs.review_count < 3
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.COPILOT_PAT }}
+
+      - name: Setup Node.js
+        if: steps.count.outputs.review_count < 3
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Copilot CLI
+        if: steps.count.outputs.review_count < 3
+        run: npm install -g @github/copilot
+
+      - name: Cache Playwright
+        if: steps.count.outputs.review_count < 3
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}
+
+      - name: Install Playwright Chromium
+        if: steps.count.outputs.review_count < 3
+        run: npx playwright install chromium --with-deps
+
+      - name: Review
+        if: steps.count.outputs.review_count < 3
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+
+          copilot --autopilot --yolo \
+            --max-autopilot-continues 10 \
+            -p "
+              You are a strict code reviewer for repository ${GH_REPO}.
+              Read AGENTS.md to understand the project spec and Global Acceptance Criteria.
+
+              Review PR #${PR_NUM}:
+              1. Run: gh pr diff ${PR_NUM}
+              2. Find the linked issue number from the PR body (Closes #N)
+              3. Read the issue: gh issue view N
+              4. Check each item in the Acceptance Criteria section
+              5. Check code quality: no dead code, no hardcoded values, proper error handling
+              6. Browser smoke test (if index.html exists):
+                 - Run: python3 -m http.server 8000 &
+                 - Write a small Playwright script that navigates to http://localhost:8000, waits 3 seconds, and collects any console errors
+                 - Run it with: node your_script.js (Playwright Chromium is pre-installed)
+                 - If any console errors are found, this is a blocking issue — REQUEST CHANGES
+                 - Kill the server when done: kill %1
+
+              You MUST take exactly one action before exiting:
+
+              APPROVE (all criteria met, code is clean):
+                gh pr review ${PR_NUM} --approve -b 'All acceptance criteria verified: [list checked items]'
+                gh pr merge ${PR_NUM} --squash --delete-branch
+
+              REQUEST CHANGES (any criterion not met):
+                gh pr review ${PR_NUM} --request-changes -b 'Issues found: [list specific problems with file:line references]'
+
+              IMPORTANT: You must run one of the above gh commands. Never exit without taking action.
+            "
+
+      - name: Fallback if review took no action
+        if: steps.count.outputs.review_count < 3 && success()
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          STATE=$(gh pr view ${PR_NUM} --json state --jq '.state')
+          if [ "$STATE" = "OPEN" ]; then
+            REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${PR_NUM}/reviews \
+              --jq '[.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED")] | length')
+            if [ "$REVIEWS" -eq 0 ]; then
+              echo "::warning::Review completed without action, auto-merging"
+              gh pr merge ${PR_NUM} --squash --delete-branch --admin \
+                --body "Auto-merged: review completed without taking action" || true
+            fi
+          fi
+
+      - name: Notify merge
+        if: steps.count.outputs.review_count < 3 && success()
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          NOTIFY_REPO: PLACEHOLDER_NOTIFY_REPO
+          NOTIFY_CHAT_ID: PLACEHOLDER_CHAT_ID
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          STATE=$(gh pr view ${PR_NUM} --json state --jq '.state')
+          if [ "$STATE" = "MERGED" ]; then
+            GH_TOKEN="${NOTIFY_TOKEN}" gh workflow run notify.yml --repo ${NOTIFY_REPO} \
+              -f chat_id="${NOTIFY_CHAT_ID}" \
+              -f text="🔀 ${{ github.repository }} PR #${PR_NUM} merged" || true
+          fi
