@@ -274,6 +274,25 @@ $TRANSLATED"
     set_output false
     ;;
 
+  /reset)
+    if [ -z "${CALLBACK_URL:-}" ] || [ -z "${CALLBACK_TOKEN:-}" ]; then
+      send_error "記憶重置失敗：Worker 未設定"
+      set_output false
+      exit 0
+    fi
+    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+      "${CALLBACK_URL%/api/callback}/api/reset/$CHAT_ID" \
+      -H "X-Secret: $CALLBACK_TOKEN") || HTTP_STATUS="000"
+    if [ "$HTTP_STATUS" = "200" ]; then
+      MSG="記憶已清除，我們可以重新開始了"
+      send_msg "$CHAT_ID" "$MSG"
+      post_callback "$MSG"
+    else
+      send_error "記憶重置失敗 (HTTP $HTTP_STATUS)"
+    fi
+    set_output false
+    ;;
+
   *)
     # No command prefix: try Gemini chat, fallback to Copilot
     if [ -z "${GEMINI_API_KEY:-}" ]; then

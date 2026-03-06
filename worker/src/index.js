@@ -144,6 +144,22 @@ export default {
       return jsonResponse(prefs);
     }
 
+    // API: reset chat memory (delete all KV keys for chatId)
+    const resetMatch = url.pathname.match(/^\/api\/reset\/(\d+)$/);
+    if (resetMatch && request.method === "POST") {
+      const secret = request.headers.get("X-Secret");
+      if (!env.CALLBACK_TOKEN || secret !== env.CALLBACK_TOKEN) {
+        return new Response("Unauthorized", { status: 403 });
+      }
+      const chatId = resetMatch[1];
+      await Promise.all([
+        env.BOT_MEMORY.delete(`chat:${chatId}:user`),
+        env.BOT_MEMORY.delete(`chat:${chatId}:bot`),
+        env.BOT_MEMORY.delete(`chat:${chatId}:prefs`),
+      ]);
+      return jsonResponse({ ok: true, chatId });
+    }
+
     // API: sync org repos into KV (one-time backfill, protected by CALLBACK_TOKEN)
     if (url.pathname === "/api/sync-repos" && request.method === "POST") {
       const secret = request.headers.get("X-Secret");
