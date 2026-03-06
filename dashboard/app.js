@@ -145,9 +145,11 @@ function renderRepos(reposData) {
   );
 
   container.innerHTML = entries.map(([name, meta], idx) => {
-    const owner = meta.owner || 'yazelin';
-    const ghUrl = `https://github.com/${owner}/${name}`;
-    const safeUrl = ghUrl.startsWith('https://github.com/') ? ghUrl : '#';
+    const owner = meta.owner || 'aw-apps';
+    const repoUrl    = `https://github.com/${owner}/${name}`;
+    const actionsUrl = `https://github.com/${owner}/${name}/actions`;
+    const pagesUrl   = meta.hasPages ? `https://${owner}.github.io/${name}/` : null;
+
     const desc = meta.description || meta.command || '';
     const iTotal = meta.issueTotal ?? 0;
     const iClosed = meta.issueClosed ?? 0;
@@ -163,11 +165,11 @@ function renderRepos(reposData) {
       return `<span class="badge badge--${t}"><i class="mdi mdi-${escapeHtml(m.icon)}" aria-hidden="true"></i>${escapeHtml(m.label)}</span>`;
     }).join('');
 
-    const progressWidth = iTotal > 0 ? pct : 0; // don't show 100% bar for "no issues"
+    const progressWidth = iTotal > 0 ? pct : 0;
 
     return `
       <div class="repo-card" style="animation:rise .38s cubic-bezier(.16,1,.3,1) ${(idx * 45)}ms both">
-        <a class="repo-name" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">
+        <a class="repo-name" href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer">
           <i class="mdi mdi-source-repository" aria-hidden="true"></i>${escapeHtml(name)}
         </a>
         ${desc ? `<div class="repo-desc">${escapeHtml(desc)}</div>` : '<div class="repo-desc" style="color:var(--text-3)">No description</div>'}
@@ -183,6 +185,17 @@ function renderRepos(reposData) {
         <div class="repo-foot">
           ${lastActText ? `<span class="repo-activity"><i class="mdi mdi-clock-outline" aria-hidden="true"></i>${escapeHtml(lastActText)}</span>` : ''}
           <div class="badges">${badgesHtml}</div>
+        </div>
+        <div class="repo-links">
+          <a class="repo-link" href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer">
+            <i class="mdi mdi-github" aria-hidden="true"></i>Repo
+          </a>
+          <a class="repo-link" href="${escapeHtml(actionsUrl)}" target="_blank" rel="noopener noreferrer">
+            <i class="mdi mdi-play-circle-outline" aria-hidden="true"></i>Actions
+          </a>
+          ${pagesUrl ? `<a class="repo-link repo-link--pages" href="${escapeHtml(pagesUrl)}" target="_blank" rel="noopener noreferrer">
+            <i class="mdi mdi-web" aria-hidden="true"></i>Site
+          </a>` : ''}
         </div>
       </div>`;
   }).join('');

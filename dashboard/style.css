@@ -233,6 +233,50 @@ a { color: inherit; text-decoration: none; }
   margin-top: 3px;
 }
 
+/* ─── Repo links bar ──────────────────────────────────────── */
+.repo-links {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-inner);
+}
+
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--bg);
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+  text-decoration: none;
+}
+
+.repo-link:hover {
+  background: var(--card);
+  border-color: #c7d2e0;
+  color: var(--text);
+}
+
+.repo-link .mdi { font-size: 13px; }
+
+.repo-link--pages {
+  color: var(--accent);
+  border-color: rgba(59,130,246,.3);
+  background: var(--accent-soft);
+}
+
+.repo-link--pages:hover {
+  background: #dbeafe;
+  border-color: var(--accent);
+}
+
 /* ─── Body layout ─────────────────────────────────────────── */
 .body-layout {
   display: grid;

@@ -290,9 +290,11 @@ async function handleSyncRepos(env) {
     const counts = await fetchIssueCounts(`${env.GITHUB_OWNER}/${repo.name}`, env.GITHUB_TOKEN);
 
     if (existing) {
-      // Update issue counts, preserve everything else
+      // Update fields from GitHub, preserve bot interaction data
       await env.BOT_MEMORY.put(key, JSON.stringify({
         ...existing,
+        owner: env.GITHUB_OWNER,
+        hasPages: repo.has_pages || false,
         issueTotal: counts.total,
         issueClosed: counts.closed,
         description: repo.description || existing.description || "",
@@ -301,6 +303,8 @@ async function handleSyncRepos(env) {
     } else {
       // Create new entry
       await env.BOT_MEMORY.put(key, JSON.stringify({
+        owner: env.GITHUB_OWNER,
+        hasPages: repo.has_pages || false,
         createdAt: repo.created_at || now,
         command: "",
         chatId: "",
