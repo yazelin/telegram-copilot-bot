@@ -436,7 +436,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 12px;
   background: #f1f5f9 !important;
   color: var(--text) !important;
-  border-color: var(--border) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .bubble-time {
