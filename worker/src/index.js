@@ -245,7 +245,8 @@ async function handleCallback(request, env) {
     return jsonResponse({ error: "Bad Request" }, 400);
   }
 
-  const { type, chat_id, text, timestamp, repo, command, description, prefs } = body;
+  const { type, chat_id, text, timestamp, repo, command, description, prefs,
+          issueTotal, issueClosed, activityType } = body;
 
   if (type === "bot_reply" && chat_id && text) {
     await appendHistory(env.BOT_MEMORY, chat_id, {
@@ -255,12 +256,39 @@ async function handleCallback(request, env) {
     });
   }
 
-  if (type === "repo_created" && repo) {
+  if (type === "repo_created" && repo && typeof repo === "string" && repo.length <= 200) {
+    const existing = (await env.BOT_MEMORY.get(`repo:${repo}`, "json")) || {};
     await env.BOT_MEMORY.put(`repo:${repo}`, JSON.stringify({
-      createdAt: timestamp || new Date().toISOString(),
-      command: command || "",
-      chatId: chat_id || "",
-      description: description || "",
+      createdAt: existing.createdAt || timestamp || new Date().toISOString(),
+      command: command || existing.command || "",
+      chatId: chat_id || existing.chatId || "",
+      description: description || existing.description || "",
+      issueTotal: issueTotal ?? existing.issueTotal ?? 0,
+      issueClosed: issueClosed ?? existing.issueClosed ?? 0,
+      lastActivity: timestamp || new Date().toISOString(),
+      interactions: Array.isArray(existing.interactions)
+        ? [...existing.interactions, { type: "created", timestamp: timestamp || new Date().toISOString() }]
+        : [{ type: "created", timestamp: timestamp || new Date().toISOString() }],
+    }));
+  }
+
+  if (type === "repo_activity" && repo && typeof repo === "string" && repo.length <= 200) {
+    const key = `repo:${repo}`;
+    let existing;
+    try {
+      existing = (await env.BOT_MEMORY.get(key, "json")) ?? {};
+    } catch (err) {
+      console.error("KV get failed for", key, err);
+      existing = {};
+    }
+    const interactions = Array.isArray(existing.interactions) ? existing.interactions : [];
+    interactions.push({ type: activityType || "unknown", timestamp: timestamp || new Date().toISOString() });
+    await env.BOT_MEMORY.put(key, JSON.stringify({
+      ...existing,
+      lastActivity: timestamp || new Date().toISOString(),
+      issueTotal: issueTotal ?? existing.issueTotal ?? 0,
+      issueClosed: issueClosed ?? existing.issueClosed ?? 0,
+      interactions: interactions.slice(-20),
     }));
   }
 
