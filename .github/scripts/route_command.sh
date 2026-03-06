@@ -45,6 +45,30 @@ print(json.dumps({'type':'bot_reply','chat_id':os.environ.get('CHAT_ID',''),'tex
     -d "$payload" || true
 }
 
+post_repo_activity() {
+  local repo="$1"
+  local activity_type="$2"
+  if [ -z "${CALLBACK_URL:-}" ] || [ -z "${CALLBACK_TOKEN:-}" ] || [ -z "$repo" ]; then
+    return 0
+  fi
+  local payload
+  payload=$(REPO="$repo" ATYPE="$activity_type" CHAT="$CHAT_ID" python3 -c "
+import json, os
+from datetime import datetime, timezone
+print(json.dumps({
+  'type': 'repo_activity',
+  'repo': os.environ['REPO'],
+  'activityType': os.environ['ATYPE'],
+  'chat_id': os.environ['CHAT'],
+  'timestamp': datetime.now(timezone.utc).isoformat(),
+}))
+")
+  curl -s -X POST "$CALLBACK_URL" \
+    -H "Content-Type: application/json" \
+    -H "X-Secret: $CALLBACK_TOKEN" \
+    -d "$payload" || true
+}
+
 # Extract a field from JSON on stdin: json_field <key> [default]
 json_field() {
   python3 -c "import sys,json; print(json.load(sys.stdin).get('$1','${2:-}'))" 2>/dev/null
@@ -64,6 +88,7 @@ case "$TEXT" in
       MSG="🚀 已觸發 $REPO 開發流程，可到 https://github.com/$REPO/actions 查看進度"
       send_msg "$CHAT_ID" "$MSG"
       post_callback "$MSG"
+      post_repo_activity "$REPO" "build"
     else
       ERROR=$(printf '%s' "$RESULT" | json_field error "Unknown error" || echo "$RESULT")
       send_error "觸發 build 失敗: $ERROR"
@@ -103,6 +128,7 @@ $MESSAGE" || true
     MSG="📝 已將指示傳達給 $REPO #$NUMBER"
     send_msg "$CHAT_ID" "$MSG"
     post_callback "$MSG"
+    post_repo_activity "$REPO" "msg"
     set_output false
     ;;
 
