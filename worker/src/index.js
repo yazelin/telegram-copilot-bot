@@ -232,6 +232,17 @@ async function handleWebhook(request, env, ctx) {
       return;
     }
 
+    // Handle /reset directly in Worker (instant, no dispatch needed)
+    if (text === "/reset") {
+      await Promise.all([
+        env.BOT_MEMORY.delete(`chat:${chatId}:user`),
+        env.BOT_MEMORY.delete(`chat:${chatId}:bot`),
+        env.BOT_MEMORY.delete(`chat:${chatId}:prefs`),
+      ]);
+      await sendTelegram(env.TELEGRAM_BOT_TOKEN, chatId, "記憶已清除，我們可以重新開始了");
+      return;
+    }
+
     // Store user message in KV
     await appendHistory(env.BOT_MEMORY, chatId, {
       role: "user",
