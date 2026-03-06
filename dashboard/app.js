@@ -1,15 +1,13 @@
 /* ============================================================
-   Telegram Copilot Bot — Dashboard Logic
+   Dashboard — App Logic (pure KV, no GitHub API)
    ============================================================ */
 
-// ─── Config ──────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────
 
 const CONFIG_KEY = 'tg-copilot-dashboard-config';
 
-// Auto-detect defaults from repo metadata
 const DEFAULTS = {
   apiUrl: 'https://telegram-copilot-relay.yazelinj303.workers.dev',
-  org: 'aw-apps',
   chatId: '850654509',
 };
 
@@ -18,10 +16,9 @@ function getConfig() {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (raw) {
       const cfg = JSON.parse(raw);
-      if (cfg.apiUrl && cfg.org && cfg.chatId) return cfg;
+      if (cfg.apiUrl && cfg.chatId) return cfg;
     }
   } catch {}
-  // Return defaults on first visit
   return { ...DEFAULTS };
 }
 
@@ -29,14 +26,39 @@ function saveConfig(config) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-// ─── MDI Icon Helpers ────────────────────────────────────────
+// ─── Utils ────────────────────────────────────────────────────
 
-function mdiIcon(name, extraClass) {
-  const cls = extraClass ? ` ${extraClass}` : '';
-  return `<i class="mdi mdi-${name}${cls}"></i>`;
+function timeAgo(dateString) {
+  if (!dateString) return '';
+  const diff = Math.max(0, Date.now() - new Date(dateString).getTime());
+  const s = Math.floor(diff / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  const w = Math.floor(d / 7);
+  const mo = Math.floor(d / 30);
+  if (s < 60)   return 'just now';
+  if (m < 60)   return `${m}m ago`;
+  if (h < 24)   return `${h}h ago`;
+  if (d < 7)    return `${d}d ago`;
+  if (w < 5)    return `${w}w ago`;
+  return `${mo}mo ago`;
 }
 
-// ─── Toast Notifications ─────────────────────────────────────
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
+}
+
+function formatTime(dateString) {
+  if (!dateString) return '';
+  try {
+    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+// ─── Toast ────────────────────────────────────────────────────
 
 const TOAST_ICONS = {
   info:    'information-outline',
@@ -48,15 +70,15 @@ function toast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast toast--${type}`;
-  el.innerHTML = `${mdiIcon(TOAST_ICONS[type] || 'information-outline')} <span>${escapeHtml(message)}</span>`;
+  el.innerHTML = `<i class="mdi mdi-${TOAST_ICONS[type] || 'information-outline'}" aria-hidden="true"></i><span>${escapeHtml(message)}</span>`;
   container.appendChild(el);
   setTimeout(() => {
     el.classList.add('removing');
-    el.addEventListener('animationend', () => el.remove());
+    el.addEventListener('animationend', () => el.remove(), { once: true });
   }, 4000);
 }
 
-// ─── Fetching ────────────────────────────────────────────────
+// ─── Fetch ────────────────────────────────────────────────────
 
 async function fetchStats(apiUrl) {
   const res = await fetch(`${apiUrl}/api/stats`);
@@ -70,207 +92,119 @@ async function fetchHistory(apiUrl, chatId) {
   return res.json();
 }
 
-async function fetchRepoMeta(apiUrl) {
+async function fetchRepos(apiUrl) {
   const res = await fetch(`${apiUrl}/api/repos`);
-  if (!res.ok) throw new Error(`Repos meta: ${res.status}`);
+  if (!res.ok) throw new Error(`Repos: ${res.status}`);
   return res.json();
 }
 
-async function fetchGitHubRepos(org) {
-  const res = await fetch(`https://api.github.com/orgs/${org}/repos?sort=updated&per_page=30`);
-  if (res.status === 403) throw new Error('RATE_LIMIT');
-  if (!res.ok) throw new Error(`GitHub repos: ${res.status}`);
-  return res.json();
-}
-
-async function fetchRepoIssues(org, repo) {
-  const res = await fetch(`https://api.github.com/repos/${org}/${repo}/issues?state=all&per_page=30`);
-  if (res.status === 403) throw new Error('RATE_LIMIT');
-  if (!res.ok) throw new Error(`GitHub issues: ${res.status}`);
-  return res.json();
-}
-
-// ─── Utils ───────────────────────────────────────────────────
-
-function timeAgo(dateString) {
-  const now = Date.now();
-  const then = new Date(dateString).getTime();
-  const diff = Math.max(0, now - then);
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const weeks = Math.floor(days / 7);
-  const months = Math.floor(days / 30);
-
-  if (seconds < 60) return 'just now';
-  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-  if (hours < 24)   return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-  if (days < 7)     return `${days} day${days !== 1 ? 's' : ''} ago`;
-  if (weeks < 5)    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-  return `${months} month${months !== 1 ? 's' : ''} ago`;
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
-
-function formatTime(dateString) {
-  try {
-    const d = new Date(dateString);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
-}
-
-// ─── Rendering: Stats ────────────────────────────────────────
+// ─── Render: Stats ────────────────────────────────────────────
 
 function renderStats(stats) {
-  const keys = ['totalMessages', 'totalApps', 'totalDraws', 'totalBuilds'];
-  keys.forEach(key => {
-    const el = document.querySelector(`.stat-value[data-key="${key}"]`);
+  ['totalMessages', 'totalApps', 'totalDraws', 'totalBuilds'].forEach(key => {
+    const el = document.querySelector(`.stat-num[data-key="${key}"]`);
     if (el) {
-      const val = stats[key] ?? 0;
-      el.textContent = val.toLocaleString();
+      el.textContent = (stats[key] ?? 0).toLocaleString();
       el.classList.remove('skeleton-text');
     }
   });
 }
 
 function renderStatsError() {
-  document.querySelectorAll('.stat-value').forEach(el => {
-    el.textContent = '\u2014';
+  document.querySelectorAll('.stat-num').forEach(el => {
+    el.textContent = '—';
     el.classList.remove('skeleton-text');
   });
 }
 
-// ─── Rendering: Repos ────────────────────────────────────────
+// ─── Render: Repos ────────────────────────────────────────────
 
-const issuesCache = {};
+const BADGE_META = {
+  created: { icon: 'plus-circle-outline', label: 'created' },
+  build:   { icon: 'hammer-wrench',        label: 'build'   },
+  msg:     { icon: 'message-text-outline', label: 'msg'     },
+};
 
-function renderRepos(ghRepos, kvMeta) {
+function renderRepos(reposData) {
   const container = document.getElementById('repos-container');
+  const entries = reposData && typeof reposData === 'object' ? Object.entries(reposData) : [];
 
-  if (!ghRepos || ghRepos.length === 0) {
+  if (entries.length === 0) {
     container.innerHTML = `
-      <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">${mdiIcon('folder-open-outline')}</div>
-        <div class="empty-msg">No repositories found</div>
-        <div class="empty-sub">Check the GitHub org in settings</div>
+      <div class="empty-state">
+        <div class="empty-icon"><i class="mdi mdi-source-repository" aria-hidden="true"></i></div>
+        <div class="empty-msg">No repositories tracked yet</div>
+        <div class="empty-sub">Use /app, /build, or /msg to track repos</div>
       </div>`;
     return;
   }
 
-  const metaMap = {};
-  if (kvMeta && Array.isArray(kvMeta)) {
-    kvMeta.forEach(m => { if (m.name) metaMap[m.name] = m; });
-  } else if (kvMeta && typeof kvMeta === 'object') {
-    Object.assign(metaMap, kvMeta);
-  }
+  // Sort by lastActivity descending
+  entries.sort((a, b) =>
+    new Date(b[1].lastActivity || 0).getTime() - new Date(a[1].lastActivity || 0).getTime()
+  );
 
-  container.innerHTML = ghRepos.map(repo => {
-    const meta = metaMap[repo.name];
-    const hasPages = repo.has_pages;
-    const org = repo.owner?.login || '';
-    const openIssues = repo.open_issues_count || 0;
-    const pagesUrl = hasPages ? `https://${org}.github.io/${repo.name}/` : null;
-    const createdVia = meta?.command || meta?.createdVia || null;
+  container.innerHTML = entries.map(([name, meta], idx) => {
+    const owner = meta.owner || 'yazelin';
+    const ghUrl = `https://github.com/${owner}/${name}`;
+    const safeUrl = ghUrl.startsWith('https://github.com/') ? ghUrl : '#';
+    const desc = meta.description || meta.command || '';
+    const iTotal = meta.issueTotal ?? 0;
+    const iClosed = meta.issueClosed ?? 0;
+    const pct = iTotal > 0 ? Math.round((iClosed / iTotal) * 100) : 100;
+    const progressLabel = iTotal > 0 ? `${iClosed}/${iTotal} closed` : 'No issues';
+    const lastActText = timeAgo(meta.lastActivity);
+
+    const interactions = Array.isArray(meta.interactions) ? meta.interactions.slice(-3) : [];
+    const badgesHtml = interactions.map(i => {
+      const rawType = (i.type || '').toLowerCase();
+      const t = ['created', 'build', 'msg'].includes(rawType) ? rawType : 'unknown';
+      const m = BADGE_META[t] || { icon: 'circle-small', label: rawType };
+      return `<span class="badge badge--${t}"><i class="mdi mdi-${escapeHtml(m.icon)}" aria-hidden="true"></i>${escapeHtml(m.label)}</span>`;
+    }).join('');
+
+    const progressWidth = iTotal > 0 ? pct : 0; // don't show 100% bar for "no issues"
 
     return `
-      <div class="repo-card" data-repo="${escapeHtml(repo.name)}" data-org="${escapeHtml(org)}">
-        <a class="repo-name" href="${escapeHtml(repo.html_url)}" target="_blank" rel="noopener"
-           onclick="event.stopPropagation()">${mdiIcon('source-repository')} ${escapeHtml(repo.name)}</a>
-        ${createdVia ? `<span class="repo-badge">${mdiIcon('auto-fix')} Created via: ${escapeHtml(createdVia)}</span>` : ''}
-        <div class="repo-desc">${escapeHtml(repo.description || 'No description')}</div>
-        <div class="repo-meta">
-          <span>${mdiIcon('clock-outline')} Updated ${timeAgo(repo.updated_at)}</span>
-          ${repo.language ? `<span>${mdiIcon('circle-small')} ${escapeHtml(repo.language)}</span>` : ''}
-          <span>${mdiIcon('circle-small')} ${openIssues} open issue${openIssues !== 1 ? 's' : ''}</span>
-        </div>
+      <div class="repo-card" style="animation:rise .38s cubic-bezier(.16,1,.3,1) ${(idx * 45)}ms both">
+        <a class="repo-name" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">
+          <i class="mdi mdi-source-repository" aria-hidden="true"></i>${escapeHtml(name)}
+        </a>
+        ${desc ? `<div class="repo-desc">${escapeHtml(desc)}</div>` : '<div class="repo-desc" style="color:var(--text-3)">No description</div>'}
         <div class="progress-wrap">
-          <div class="progress-bar-outer">
-            <div class="progress-bar-inner" style="width:0%" id="prog-${escapeHtml(repo.name)}"></div>
+          <div class="progress-outer">
+            <div class="progress-inner" data-target="${progressWidth}" style="width:0%"></div>
           </div>
-          <div class="progress-label">
-            <span id="prog-label-${escapeHtml(repo.name)}">${openIssues} open</span>
-            <span id="prog-pct-${escapeHtml(repo.name)}"></span>
+          <div class="progress-lbl">
+            <span>${escapeHtml(progressLabel)}</span>
+            ${iTotal > 0 ? `<span>${pct}%</span>` : ''}
           </div>
         </div>
-        <div class="repo-actions">
-          ${pagesUrl ? `<a class="btn-pages" href="${escapeHtml(pagesUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${mdiIcon('web')} GitHub Pages</a>` : ''}
-        </div>
-        <div class="repo-issues">
-          <ul class="issues-list" id="issues-${escapeHtml(repo.name)}"></ul>
+        <div class="repo-foot">
+          ${lastActText ? `<span class="repo-activity"><i class="mdi mdi-clock-outline" aria-hidden="true"></i>${escapeHtml(lastActText)}</span>` : ''}
+          <div class="badges">${badgesHtml}</div>
         </div>
       </div>`;
   }).join('');
 
-  // attach click handlers for expand (issues loaded on demand)
-  container.querySelectorAll('.repo-card').forEach(card => {
-    card.addEventListener('click', () => handleRepoClick(card));
-  });
+  // Animate progress bars after DOM renders
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    container.querySelectorAll('.progress-inner[data-target]').forEach(bar => {
+      bar.style.width = `${bar.dataset.target}%`;
+    });
+  }));
 }
 
-async function loadIssuesForRepo(org, repoName) {
-  if (!org || !repoName) return;
-  try {
-    const issues = await fetchRepoIssues(org, repoName);
-    // filter out pull requests
-    const realIssues = issues.filter(i => !i.pull_request);
-    issuesCache[repoName] = realIssues;
-
-    const closed = realIssues.filter(i => i.state === 'closed').length;
-    const total = realIssues.length;
-    const pct = total > 0 ? Math.round((closed / total) * 100) : 100;
-
-    const bar = document.getElementById(`prog-${repoName}`);
-    const label = document.getElementById(`prog-label-${repoName}`);
-    const pctEl = document.getElementById(`prog-pct-${repoName}`);
-
-    if (bar)   bar.style.width = `${pct}%`;
-    if (label) label.textContent = `${closed} / ${total} closed`;
-    if (pctEl) pctEl.textContent = `${pct}%`;
-  } catch (err) {
-    if (err.message === 'RATE_LIMIT') {
-      const label = document.getElementById(`prog-label-${repoName}`);
-      if (label) label.textContent = 'Rate limited';
-    }
-  }
+function renderReposError() {
+  document.getElementById('repos-container').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon"><i class="mdi mdi-alert-outline" aria-hidden="true"></i></div>
+      <div class="empty-msg">Could not load repositories</div>
+      <div class="empty-sub">Check your Worker API URL in settings</div>
+    </div>`;
 }
 
-function handleRepoClick(card) {
-  const repoName = card.dataset.repo;
-  const org = card.dataset.org;
-  const isExpanded = card.classList.toggle('expanded');
-
-  // Load issues on first expand
-  if (isExpanded && !issuesCache[repoName]) {
-    loadIssuesForRepo(org, repoName);
-    return;
-  }
-
-  if (isExpanded && issuesCache[repoName]) {
-    const list = card.querySelector('.issues-list');
-    const issues = issuesCache[repoName];
-
-    if (issues.length === 0) {
-      list.innerHTML = '<li class="issue-item" style="color:var(--text-muted)">No issues</li>';
-    } else {
-      list.innerHTML = issues.map(iss => `
-        <li class="issue-item">
-          <span class="issue-badge issue-badge--${iss.state === 'open' ? 'open' : 'closed'}"></span>
-          <span class="issue-title">
-            <a href="${escapeHtml(iss.html_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(iss.title)}</a>
-          </span>
-        </li>`).join('');
-    }
-  }
-}
-
-// ─── Rendering: Chat ─────────────────────────────────────────
+// ─── Render: Chat ─────────────────────────────────────────────
 
 function renderChat(history) {
   const container = document.getElementById('chat-messages');
@@ -278,9 +212,9 @@ function renderChat(history) {
   if (!history || !Array.isArray(history) || history.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${mdiIcon('message-text-outline')}</div>
+        <div class="empty-icon"><i class="mdi mdi-message-text-outline" aria-hidden="true"></i></div>
         <div class="empty-msg">No messages yet</div>
-        <div class="empty-sub">Messages from the Telegram bot will appear here</div>
+        <div class="empty-sub">Bot conversations will appear here</div>
       </div>`;
     return;
   }
@@ -289,171 +223,123 @@ function renderChat(history) {
     const isUser = msg.role === 'user' || msg.from === 'user';
     const text = msg.text || msg.content || '';
     const isCommand = text.startsWith('/');
-    const rowClass = isUser ? 'bubble-row--user' : 'bubble-row--bot';
-    const bubbleClass = isUser ? 'bubble--user' : 'bubble--bot';
-    const cmdClass = isCommand ? ' bubble--command' : '';
+    const rowCls = isUser ? 'bubble-row--user' : 'bubble-row--bot';
+    const bubbleCls = isUser ? 'bubble--user' : 'bubble--bot';
+    const cmdCls = isCommand ? ' bubble--command' : '';
     const time = msg.timestamp || msg.date || msg.created_at || '';
-
     return `
-      <div class="bubble-row ${rowClass}">
+      <div class="bubble-row ${rowCls}">
         <div>
-          <div class="bubble ${bubbleClass}${cmdClass}">${escapeHtml(text)}</div>
+          <div class="bubble ${bubbleCls}${cmdCls}">${escapeHtml(text)}</div>
           ${time ? `<div class="bubble-time">${formatTime(time)}</div>` : ''}
         </div>
       </div>`;
   }).join('');
 
-  // scroll to bottom
-  requestAnimationFrame(() => {
-    container.scrollTop = container.scrollHeight;
-  });
+  requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; });
 }
 
-// ─── Main Refresh Logic ──────────────────────────────────────
+function renderChatError() {
+  document.getElementById('chat-messages').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon"><i class="mdi mdi-alert-outline" aria-hidden="true"></i></div>
+      <div class="empty-msg">Could not load chat history</div>
+      <div class="empty-sub">Check your Worker API URL and Chat ID</div>
+    </div>`;
+}
+
+// ─── Refresh ──────────────────────────────────────────────────
 
 let isRefreshing = false;
 
 async function refresh() {
   if (isRefreshing) return;
-  const config = getConfig();
-  if (!config) {
-    openSettings();
-    toast('Please configure settings first', 'info');
-    return;
-  }
-
   isRefreshing = true;
   const refreshIcon = document.querySelector('.icon-refresh');
   if (refreshIcon) refreshIcon.classList.add('spinning');
-
-  // Fetch worker API data in parallel
-  const workerPromises = [
-    fetchStats(config.apiUrl).catch(err => {
-      console.error('Stats fetch failed:', err);
-      toast('Worker offline — could not fetch stats. Check your API URL and try again.', 'error');
-      return null;
-    }),
-    fetchHistory(config.apiUrl, config.chatId).catch(err => {
-      console.error('History fetch failed:', err);
-      toast('Worker offline — could not fetch chat history.', 'error');
-      return null;
-    }),
-    fetchRepoMeta(config.apiUrl).catch(err => {
-      console.error('Repo meta fetch failed:', err);
-      return null;
-    }),
-  ];
-
-  const ghPromise = fetchGitHubRepos(config.org).catch(err => {
-    console.error('GitHub repos fetch failed:', err);
-    if (err.message === 'RATE_LIMIT') {
-      toast('GitHub API rate limit reached (60 req/hour). Try again later.', 'error');
-    } else {
-      toast(`Could not fetch GitHub repos: ${err.message}`, 'error');
-    }
-    return null;
-  });
-
-  const [stats, history, kvMeta, ghRepos] = await Promise.all([
-    ...workerPromises,
-    ghPromise,
-  ]);
-
-  // Render stats
-  if (stats) {
-    renderStats(stats);
-  } else {
-    renderStatsError();
+  try {
+    const config = getConfig();
+    const [stats, history, repos] = await Promise.all([
+      fetchStats(config.apiUrl).catch(err => {
+        console.error('Stats fetch failed:', err);
+        toast('Worker offline — could not fetch stats', 'error');
+        return null;
+      }),
+      fetchHistory(config.apiUrl, config.chatId).catch(err => {
+        console.error('History fetch failed:', err);
+        toast('Could not fetch chat history', 'error');
+        return null;
+      }),
+      fetchRepos(config.apiUrl).catch(err => {
+        console.error('Repos fetch failed:', err);
+        toast('Could not fetch repositories', 'error');
+        return null;
+      }),
+    ]);
+    if (stats)   renderStats(stats);   else renderStatsError();
+    if (repos)   renderRepos(repos);   else renderReposError();
+    if (history) renderChat(history);  else renderChatError();
+  } finally {
+    isRefreshing = false;
+    if (refreshIcon) refreshIcon.classList.remove('spinning');
   }
-
-  // Render repos
-  if (ghRepos) {
-    renderRepos(ghRepos, kvMeta);
-  } else {
-    document.getElementById('repos-container').innerHTML = `
-      <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">${mdiIcon('alert-outline')}</div>
-        <div class="empty-msg">Could not load repositories</div>
-        <div class="empty-sub">Check the GitHub org name or try again later</div>
-      </div>`;
-  }
-
-  // Render chat
-  if (history) {
-    renderChat(history);
-  } else {
-    document.getElementById('chat-messages').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">${mdiIcon('alert-outline')}</div>
-        <div class="empty-msg">Could not load chat history</div>
-        <div class="empty-sub">Check your Worker API URL and Chat ID</div>
-      </div>`;
-  }
-
-  isRefreshing = false;
-  if (refreshIcon) refreshIcon.classList.remove('spinning');
 }
 
-// ─── Settings Panel ──────────────────────────────────────────
+// ─── Settings ─────────────────────────────────────────────────
 
 function openSettings() {
-  const panel = document.getElementById('settings-panel');
-  panel.classList.add('open');
-  panel.setAttribute('aria-hidden', 'false');
-
-  // populate fields from config
   const config = getConfig();
-  if (config) {
-    document.getElementById('input-api-url').value = config.apiUrl || '';
-    document.getElementById('input-org').value = config.org || '';
-    document.getElementById('input-chat-id').value = config.chatId || '';
-  }
+  document.getElementById('input-api-url').value = config.apiUrl || '';
+  document.getElementById('input-chat-id').value = config.chatId || '';
+  document.getElementById('settings-panel').classList.add('open');
+  document.getElementById('settings-panel').setAttribute('aria-hidden', 'false');
+  document.getElementById('settings-overlay').classList.add('open');
+  // Move focus into panel for keyboard accessibility
+  const firstInput = document.getElementById('input-api-url');
+  if (firstInput) setTimeout(() => firstInput.focus(), 50);
 }
 
 function closeSettings() {
-  const panel = document.getElementById('settings-panel');
-  panel.classList.remove('open');
-  panel.setAttribute('aria-hidden', 'true');
+  document.getElementById('settings-panel').classList.remove('open');
+  document.getElementById('settings-panel').setAttribute('aria-hidden', 'true');
+  document.getElementById('settings-overlay').classList.remove('open');
+  const settingsBtn = document.getElementById('btn-settings');
+  if (settingsBtn) settingsBtn.focus();
 }
 
 function handleSaveSettings() {
   const apiUrl = document.getElementById('input-api-url').value.trim().replace(/\/+$/, '');
-  const org = document.getElementById('input-org').value.trim();
   const chatId = document.getElementById('input-chat-id').value.trim();
-
-  if (!apiUrl || !org || !chatId) {
+  if (!apiUrl || !chatId) {
     toast('Please fill in all fields', 'error');
     return;
   }
-
-  saveConfig({ apiUrl, org, chatId });
+  if (!/^\d+$/.test(chatId)) {
+    toast('Chat ID must be numeric', 'error');
+    return;
+  }
+  saveConfig({ apiUrl, chatId });
   closeSettings();
   toast('Settings saved', 'success');
   refresh();
 }
 
-// ─── Init ────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────
 
 function init() {
-  // Settings toggle
   document.getElementById('btn-settings').addEventListener('click', () => {
-    const panel = document.getElementById('settings-panel');
-    if (panel.classList.contains('open')) {
-      closeSettings();
-    } else {
-      openSettings();
-    }
+    document.getElementById('settings-panel').classList.contains('open') ? closeSettings() : openSettings();
   });
 
+  document.getElementById('btn-refresh').addEventListener('click', refresh);
   document.getElementById('btn-save-settings').addEventListener('click', handleSaveSettings);
   document.getElementById('btn-cancel-settings').addEventListener('click', closeSettings);
+  document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+  document.getElementById('settings-overlay').addEventListener('click', closeSettings);
 
-  // Refresh
-  document.getElementById('btn-refresh').addEventListener('click', refresh);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
 
-  // Always have valid config (defaults or saved), just refresh
   refresh();
 }
 
-// Kick off
 document.addEventListener('DOMContentLoaded', init);
