@@ -269,6 +269,17 @@ async function handleSyncRepos(env) {
 
   const now = new Date().toISOString();
   const results = [];
+  const ghRepoNames = new Set(ghRepos.map(r => r.name).filter(Boolean));
+
+  // Delete KV entries for repos that no longer exist on GitHub
+  const kvList = await env.BOT_MEMORY.list({ prefix: "repo:" });
+  for (const kvKey of kvList.keys) {
+    const repoName = kvKey.name.replace("repo:", "");
+    if (!ghRepoNames.has(repoName)) {
+      await env.BOT_MEMORY.delete(kvKey.name);
+      results.push({ repo: repoName, action: "deleted" });
+    }
+  }
 
   for (const repo of ghRepos) {
     if (!repo.name || typeof repo.name !== "string") continue;
