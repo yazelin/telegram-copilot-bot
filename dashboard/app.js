@@ -29,13 +29,26 @@ function saveConfig(config) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
+// ─── MDI Icon Helpers ────────────────────────────────────────
+
+function mdiIcon(name, extraClass) {
+  const cls = extraClass ? ` ${extraClass}` : '';
+  return `<i class="mdi mdi-${name}${cls}"></i>`;
+}
+
 // ─── Toast Notifications ─────────────────────────────────────
+
+const TOAST_ICONS = {
+  info:    'information-outline',
+  success: 'check-circle-outline',
+  error:   'alert-circle-outline',
+};
 
 function toast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast toast--${type}`;
-  el.textContent = message;
+  el.innerHTML = `${mdiIcon(TOAST_ICONS[type] || 'information-outline')} <span>${escapeHtml(message)}</span>`;
   container.appendChild(el);
   setTimeout(() => {
     el.classList.add('removing');
@@ -129,7 +142,7 @@ function renderStats(stats) {
 
 function renderStatsError() {
   document.querySelectorAll('.stat-value').forEach(el => {
-    el.textContent = '—';
+    el.textContent = '\u2014';
     el.classList.remove('skeleton-text');
   });
 }
@@ -144,7 +157,7 @@ function renderRepos(ghRepos, kvMeta) {
   if (!ghRepos || ghRepos.length === 0) {
     container.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">📂</div>
+        <div class="empty-icon">${mdiIcon('folder-open-outline')}</div>
         <div class="empty-msg">No repositories found</div>
         <div class="empty-sub">Check the GitHub org in settings</div>
       </div>`;
@@ -169,13 +182,13 @@ function renderRepos(ghRepos, kvMeta) {
     return `
       <div class="repo-card" data-repo="${escapeHtml(repo.name)}" data-org="${escapeHtml(org)}">
         <a class="repo-name" href="${escapeHtml(repo.html_url)}" target="_blank" rel="noopener"
-           onclick="event.stopPropagation()">${escapeHtml(repo.name)}</a>
-        ${createdVia ? `<span class="repo-badge">✨ Created via: ${escapeHtml(createdVia)}</span>` : ''}
+           onclick="event.stopPropagation()">${mdiIcon('source-repository')} ${escapeHtml(repo.name)}</a>
+        ${createdVia ? `<span class="repo-badge">${mdiIcon('auto-fix')} Created via: ${escapeHtml(createdVia)}</span>` : ''}
         <div class="repo-desc">${escapeHtml(repo.description || 'No description')}</div>
         <div class="repo-meta">
-          <span>Updated ${timeAgo(repo.updated_at)}</span>
-          ${repo.language ? `<span>· ${escapeHtml(repo.language)}</span>` : ''}
-          <span>· ${openIssues} open issue${openIssues !== 1 ? 's' : ''}</span>
+          <span>${mdiIcon('clock-outline')} Updated ${timeAgo(repo.updated_at)}</span>
+          ${repo.language ? `<span>${mdiIcon('circle-small')} ${escapeHtml(repo.language)}</span>` : ''}
+          <span>${mdiIcon('circle-small')} ${openIssues} open issue${openIssues !== 1 ? 's' : ''}</span>
         </div>
         <div class="progress-wrap">
           <div class="progress-bar-outer">
@@ -187,7 +200,7 @@ function renderRepos(ghRepos, kvMeta) {
           </div>
         </div>
         <div class="repo-actions">
-          ${pagesUrl ? `<a class="btn-pages" href="${escapeHtml(pagesUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🌐 GitHub Pages</a>` : ''}
+          ${pagesUrl ? `<a class="btn-pages" href="${escapeHtml(pagesUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${mdiIcon('web')} GitHub Pages</a>` : ''}
         </div>
         <div class="repo-issues">
           <ul class="issues-list" id="issues-${escapeHtml(repo.name)}"></ul>
@@ -263,7 +276,7 @@ function renderChat(history) {
   if (!history || !Array.isArray(history) || history.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">💬</div>
+        <div class="empty-icon">${mdiIcon('message-text-outline')}</div>
         <div class="empty-msg">No messages yet</div>
         <div class="empty-sub">Messages from the Telegram bot will appear here</div>
       </div>`;
@@ -357,7 +370,7 @@ async function refresh() {
   } else {
     document.getElementById('repos-container').innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">⚠️</div>
+        <div class="empty-icon">${mdiIcon('alert-outline')}</div>
         <div class="empty-msg">Could not load repositories</div>
         <div class="empty-sub">Check the GitHub org name or try again later</div>
       </div>`;
@@ -369,7 +382,7 @@ async function refresh() {
   } else {
     document.getElementById('chat-messages').innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">⚠️</div>
+        <div class="empty-icon">${mdiIcon('alert-outline')}</div>
         <div class="empty-msg">Could not load chat history</div>
         <div class="empty-sub">Check your Worker API URL and Chat ID</div>
       </div>`;
