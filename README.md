@@ -27,7 +27,7 @@
 | v2.0 | `v2.0` | Shell 前處理 + Gemini Flash API + 一鍵設定 + Graceful degradation |
 | v1.0 | `v1.0-before-shell-routing` | 所有訊息都經過 Copilot CLI 處理 |
 
-> **v3.0 改動重點**：Cloudflare Worker 新增 KV 記憶系統，儲存對話歷史、Repo 元資料與統計數字。新增純前端 Dashboard（GitHub Pages），透過 Worker API 讀取資料，零 GitHub API 呼叫。新增 `/api/sync-repos` 端點自動同步 aw-apps 組織的 Repo 清單與 Issue 進度。
+> **v3.0 改動重點**：Cloudflare Worker 新增 KV 記憶系統，儲存對話歷史、Repo 元資料與統計數字。所有機器人回覆（含 Copilot CLI 路由、`notify.yml` 子 Repo 通知）均自動記錄至 KV。新增純前端 Dashboard（GitHub Pages），透過 Worker API 讀取資料，零 GitHub API 呼叫。新增 `/api/sync-repos` 端點自動同步 aw-apps 組織的 Repo 清單與 Issue 進度。新增 `/reset` 指令可立即清除對話記憶（直接在 Worker 處理，無需等 Actions）。
 
 > **v2.0 改動重點**：新增 `route_command.sh` 和 `gemini_chat.py`，簡單命令（`/build`、`/msg`、`/download`、`/draw`、`/translate`、一般聊天）由 shell 腳本 + Gemini Flash API 直接處理，不消耗 Premium Request。只有 `/app`、`/issue`、`/research` 和 Gemini 無法處理的訊息才呼叫 Copilot CLI。新增 `setup.sh` 一鍵安裝精靈、Secret 缺失時的友善提示（Graceful degradation）、動態 repository owner 支援。
 
@@ -67,6 +67,7 @@
 | `/draw <描述>` | AI 圖片生成（Gemini） | `/draw 一隻柴犬在太空` |
 | `/translate <文字>` | 翻譯文字 | `/translate Hello World` |
 | `/download <網址>` | 下載 YouTube、X 等平台影片 | `/download https://youtu.be/...` |
+| `/reset` | 清除所有對話記憶，重新開始 | `/reset` |
 | *（無前綴）* | 自動判斷：聊天、翻譯或選擇最佳模式 | `幫我翻譯這段英文` |
 
 ## 系統架構
