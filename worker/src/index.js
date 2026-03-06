@@ -144,6 +144,15 @@ export default {
       return jsonResponse(prefs);
     }
 
+    // API: sync org repos into KV (one-time backfill, protected by CALLBACK_TOKEN)
+    if (url.pathname === "/api/sync-repos" && request.method === "POST") {
+      const secret = request.headers.get("X-Secret");
+      if (!env.CALLBACK_TOKEN || secret !== env.CALLBACK_TOKEN) {
+        return new Response("Unauthorized", { status: 403 });
+      }
+      return handleSyncRepos(env);
+    }
+
     return new Response("telegram-copilot-bot relay", { status: 200 });
   },
 };
@@ -228,6 +237,73 @@ async function handleWebhook(request, env, ctx) {
   })());
 
   return new Response("OK", { status: 200 });
+}
+
+// --- Repo Sync (Backfill) ---
+
+async function handleSyncRepos(env) {
+  if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER) {
+    return jsonResponse({ ok: false, error: "GITHUB_TOKEN or GITHUB_OWNER not set" }, 500);
+  }
+
+  // Fetch all repos from GitHub (try org first, fall back to user account)
+  let ghRepos = [];
+  try {
+    const headers = { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "telegram-copilot-bot" };
+    let res = await fetch(
+      `https://api.github.com/orgs/${env.GITHUB_OWNER}/repos?sort=updated&per_page=100`,
+      { headers }
+    );
+    if (res.status === 404) {
+      // Not an org — try user repos
+      res = await fetch(
+        `https://api.github.com/users/${env.GITHUB_OWNER}/repos?sort=updated&per_page=100`,
+        { headers }
+      );
+    }
+    if (!res.ok) return jsonResponse({ ok: false, error: `GitHub repos: ${res.status}` }, 502);
+    ghRepos = await res.json();
+  } catch (err) {
+    return jsonResponse({ ok: false, error: String(err) }, 500);
+  }
+
+  const now = new Date().toISOString();
+  const results = [];
+
+  for (const repo of ghRepos) {
+    if (!repo.name || typeof repo.name !== "string") continue;
+    const key = `repo:${repo.name}`;
+    const existing = await env.BOT_MEMORY.get(key, "json");
+
+    // Fetch issue counts server-side
+    const counts = await fetchIssueCounts(`${env.GITHUB_OWNER}/${repo.name}`, env.GITHUB_TOKEN);
+
+    if (existing) {
+      // Update issue counts, preserve everything else
+      await env.BOT_MEMORY.put(key, JSON.stringify({
+        ...existing,
+        issueTotal: counts.total,
+        issueClosed: counts.closed,
+        description: repo.description || existing.description || "",
+      }));
+      results.push({ repo: repo.name, action: "updated" });
+    } else {
+      // Create new entry
+      await env.BOT_MEMORY.put(key, JSON.stringify({
+        createdAt: repo.created_at || now,
+        command: "",
+        chatId: "",
+        description: repo.description || "",
+        issueTotal: counts.total,
+        issueClosed: counts.closed,
+        lastActivity: repo.pushed_at || repo.updated_at || now,
+        interactions: [],
+      }));
+      results.push({ repo: repo.name, action: "created" });
+    }
+  }
+
+  return jsonResponse({ ok: true, synced: results.length, results });
 }
 
 // --- Issue Count Fetcher ---
