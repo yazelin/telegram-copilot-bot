@@ -242,8 +242,8 @@ async function handleWebhook(request, env, ctx) {
 // --- Repo Sync (Backfill) ---
 
 async function handleSyncRepos(env) {
-  if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER) {
-    return jsonResponse({ ok: false, error: "GITHUB_TOKEN or GITHUB_OWNER not set" }, 500);
+  if (!env.GITHUB_TOKEN || !env.APPS_ORG) {
+    return jsonResponse({ ok: false, error: "GITHUB_TOKEN or APPS_ORG not set" }, 500);
   }
 
   // Fetch all repos from GitHub (try org first, fall back to user account)
@@ -251,13 +251,13 @@ async function handleSyncRepos(env) {
   try {
     const headers = { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "telegram-copilot-bot" };
     let res = await fetch(
-      `https://api.github.com/orgs/${env.GITHUB_OWNER}/repos?sort=updated&per_page=100`,
+      `https://api.github.com/orgs/${env.APPS_ORG}/repos?sort=updated&per_page=100`,
       { headers }
     );
     if (res.status === 404) {
       // Not an org — try user repos
       res = await fetch(
-        `https://api.github.com/users/${env.GITHUB_OWNER}/repos?sort=updated&per_page=100`,
+        `https://api.github.com/users/${env.APPS_ORG}/repos?sort=updated&per_page=100`,
         { headers }
       );
     }
@@ -287,14 +287,14 @@ async function handleSyncRepos(env) {
     const existing = await env.BOT_MEMORY.get(key, "json");
 
     // Fetch issue counts server-side
-    const counts = await fetchIssueCounts(`${env.GITHUB_OWNER}/${repo.name}`, env.GITHUB_TOKEN);
+    const counts = await fetchIssueCounts(`${env.APPS_ORG}/${repo.name}`, env.GITHUB_TOKEN);
 
     // parent is not included in list response — fetch individually for forks
     let forkData = { fork: false, forkedFrom: null };
     if (repo.fork) {
       try {
         const fr = await fetch(
-          `https://api.github.com/repos/${env.GITHUB_OWNER}/${repo.name}`,
+          `https://api.github.com/repos/${env.APPS_ORG}/${repo.name}`,
           { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "telegram-copilot-bot" } }
         );
         if (fr.ok) {
@@ -312,7 +312,7 @@ async function handleSyncRepos(env) {
       // Update fields from GitHub, preserve bot interaction data
       await env.BOT_MEMORY.put(key, JSON.stringify({
         ...existing,
-        owner: env.GITHUB_OWNER,
+        owner: env.APPS_ORG,
         hasPages: repo.has_pages || false,
         ...forkData,
         issueTotal: counts.total,
@@ -323,7 +323,7 @@ async function handleSyncRepos(env) {
     } else {
       // Create new entry
       await env.BOT_MEMORY.put(key, JSON.stringify({
-        owner: env.GITHUB_OWNER,
+        owner: env.APPS_ORG,
         hasPages: repo.has_pages || false,
         ...forkData,
         createdAt: repo.created_at || now,
@@ -394,8 +394,8 @@ async function handleCallback(request, env) {
     let iTotal = issueTotal ?? 0;
     let iClosed = issueClosed ?? 0;
     // If issue counts not provided, fetch them
-    if ((issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.GITHUB_OWNER) {
-      const counts = await fetchIssueCounts(env.GITHUB_OWNER + "/" + repo, env.GITHUB_TOKEN);
+    if ((issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.APPS_ORG) {
+      const counts = await fetchIssueCounts(env.APPS_ORG + "/" + repo, env.GITHUB_TOKEN);
       iTotal = counts.total;
       iClosed = counts.closed;
     }
@@ -431,8 +431,8 @@ async function handleCallback(request, env) {
     // Fetch issue counts if needed
     let iTotal = issueTotal ?? existing.issueTotal ?? 0;
     let iClosed = issueClosed ?? existing.issueClosed ?? 0;
-    if (activityType === "msg" && (issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.GITHUB_OWNER) {
-      const counts = await fetchIssueCounts(env.GITHUB_OWNER + "/" + repo, env.GITHUB_TOKEN);
+    if (activityType === "msg" && (issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.APPS_ORG) {
+      const counts = await fetchIssueCounts(env.APPS_ORG + "/" + repo, env.GITHUB_TOKEN);
       iTotal = counts.total;
       iClosed = counts.closed;
     }
