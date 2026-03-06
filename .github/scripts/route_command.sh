@@ -25,7 +25,6 @@ set_output() {
 
 send_error() {
   send_msg "$CHAT_ID" "❌ $1" || true
-  post_callback "❌ $1"
 }
 
 # Post bot reply to callback for history storage
@@ -87,7 +86,6 @@ case "$TEXT" in
     if [ "$OK" = "True" ]; then
       MSG="🚀 已觸發 $REPO 開發流程，可到 https://github.com/$REPO/actions 查看進度"
       send_msg "$CHAT_ID" "$MSG"
-      post_callback "$MSG"
       post_repo_activity "$REPO" "build"
     else
       ERROR=$(printf '%s' "$RESULT" | json_field error "Unknown error" || echo "$RESULT")
@@ -127,7 +125,6 @@ $MESSAGE" || true
 
     MSG="📝 已將指示傳達給 $REPO #$NUMBER"
     send_msg "$CHAT_ID" "$MSG"
-    post_callback "$MSG"
     post_repo_activity "$REPO" "msg"
     set_output false
     ;;
@@ -166,7 +163,6 @@ $MESSAGE" || true
     else
       MSG="⚠️ 影片太大 ($(( FILESIZE / 1048576 ))MB)，超過 Telegram 50MB 限制"
       send_msg "$CHAT_ID" "$MSG"
-      post_callback "$MSG"
     fi
     set_output false
     ;;
@@ -180,7 +176,6 @@ $MESSAGE" || true
     if [ -z "${GEMINI_API_KEY:-}" ]; then
       MSG="⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
       send_msg "$CHAT_ID" "$MSG"
-      post_callback "$MSG"
       set_output false; exit 0
     fi
     DESCRIPTION="${TEXT#/draw }"
@@ -236,7 +231,6 @@ $MESSAGE" || true
     if [ -z "${GEMINI_API_KEY:-}" ]; then
       MSG="⚙️ 此功能需要 GEMINI_API_KEY，請執行 setup.sh 設定"
       send_msg "$CHAT_ID" "$MSG"
-      post_callback "$MSG"
       set_output false; exit 0
     fi
     INPUT="${TEXT#/translate }"
@@ -251,7 +245,6 @@ $MESSAGE" || true
 
 $TRANSLATED"
       send_msg "$CHAT_ID" "$MSG"
-      post_callback "$MSG"
     else
       ERROR=$(printf '%s' "$RESULT" | json_field error "翻譯失敗" || echo "翻譯失敗")
       send_error "翻譯失敗: $ERROR"
@@ -298,7 +291,6 @@ $TRANSLATED"
         set_output true
       else
         send_msg "$CHAT_ID" "$REPLY"
-        post_callback "$REPLY"
         set_output false
       fi
     else
