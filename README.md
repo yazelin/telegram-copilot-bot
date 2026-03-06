@@ -4,9 +4,9 @@
 
 本專案是 [aw-telegram-bot](https://github.com/yazelin/aw-telegram-bot) 的**無 gh-aw 版本**。原版使用 [gh-aw](https://github.com/github/gh-aw)（GitHub Agentic Workflows）框架，本版本移除該依賴，直接使用 `npm install -g @github/copilot` 安裝 Copilot CLI。功能完全相同。
 
-## 與原版 (aw-telegram-bot) 的比較
+**Dashboard（純 KV 資料，無 GitHub API 呼叫）：** https://yazelin.github.io/telegram-copilot-bot/dashboard/
 
-### 差異對照表
+## 與原版 (aw-telegram-bot) 的比較
 
 | 項目 | aw-telegram-bot（原版） | telegram-copilot-bot（本版） |
 |------|------------------------|----------------------------|
@@ -19,14 +19,15 @@
 | App Factory | 事件驅動開發鏈 | 事件驅動開發鏈（相同） |
 | 子 Repo 結構 | implement.yml + review.yml + skills | 相同 |
 
-
 ## 版本歷史
 
 | 版本 | Tag | 說明 |
 |------|-----|------|
-| v3.0（開發中） | — | 記憶功能 + Dashboard |
-| v2.0（目前） | `v2.0` | Shell 前處理 + Gemini Flash API + 一鍵設定 + Graceful degradation |
+| v3.0（目前） | `v3.0` | 記憶功能 + 純 KV Dashboard（無 GitHub API 呼叫）|
+| v2.0 | `v2.0` | Shell 前處理 + Gemini Flash API + 一鍵設定 + Graceful degradation |
 | v1.0 | `v1.0-before-shell-routing` | 所有訊息都經過 Copilot CLI 處理 |
+
+> **v3.0 改動重點**：Cloudflare Worker 新增 KV 記憶系統，儲存對話歷史、Repo 元資料與統計數字。新增純前端 Dashboard（GitHub Pages），透過 Worker API 讀取資料，零 GitHub API 呼叫。新增 `/api/sync-repos` 端點自動同步 aw-apps 組織的 Repo 清單與 Issue 進度。
 
 > **v2.0 改動重點**：新增 `route_command.sh` 和 `gemini_chat.py`，簡單命令（`/build`、`/msg`、`/download`、`/draw`、`/translate`、一般聊天）由 shell 腳本 + Gemini Flash API 直接處理，不消耗 Premium Request。只有 `/app`、`/issue`、`/research` 和 Gemini 無法處理的訊息才呼叫 Copilot CLI。新增 `setup.sh` 一鍵安裝精靈、Secret 缺失時的友善提示（Graceful degradation）、動態 repository owner 支援。
 
@@ -34,24 +35,24 @@
 
 ```
 你 (Telegram) → Cloudflare Worker → GitHub Actions
-                                          │
-                                    route_command.sh 解析命令
-                                          │
-                        ┌─────────────────┼─────────────────┐
-                        ▼                 ▼                 ▼
-                  Shell 直接處理     Gemini Flash API    Copilot CLI
-                  /build, /msg      /draw, /translate   /app, /issue
-                  /download         一般聊天             /research
-                  (0 Premium)       (0 Premium)         (1 Premium)
+                     │                    │
+                  KV 記憶            route_command.sh 解析命令
+                  （歷史 / Repo）          │
+                                ┌──────────┼──────────┐
+                                ▼          ▼          ▼
+                          Shell 直接   Gemini Flash  Copilot CLI
+                          /build,msg   /draw,/trans  /app,/issue
+                          /download    一般聊天       /research
+                          (0 Premium)  (0 Premium)   (1 Premium)
 ```
 
 1. 傳送訊息給 Telegram 機器人
-2. Cloudflare Worker 接收 Webhook，驗證使用者身份，轉發到 GitHub Actions
+2. Cloudflare Worker 接收 Webhook，驗證使用者身份，將訊息寫入 KV 歷史，轉發到 GitHub Actions
 3. `route_command.sh` 解析命令前綴，決定路由：
    - **Shell 直接處理**：`/build`、`/msg`、`/download` → 呼叫對應 Python 腳本（0 cost）
    - **Gemini Flash API**：`/draw`、`/translate`、一般聊天 → `gemini_chat.py`（0 Premium Request）
    - **Copilot CLI**：`/app`、`/issue`、`/research`、Gemini 無法處理的訊息（1 Premium Request）
-4. 只在需要時才安裝並啟動 Copilot CLI
+4. Actions 完成後透過 `/api/callback` 回傳結果，Worker 寫入 KV（機器人回覆、Repo 元資料、統計）
 
 ## 指令列表
 
@@ -73,26 +74,30 @@
 ### 元件總覽
 
 ```
-┌─────────────┐     webhook      ┌──────────────────┐    dispatch     ┌─────────────────────┐
-│  Telegram    │ ──────────────→ │  Cloudflare       │ ─────────────→ │  GitHub Actions      │
-│  （使用者）   │ ←────────────── │  Worker           │                │  （父 Repo）          │
-│              │    機器人回覆     │  - 身份驗證        │                │                      │
-└─────────────┘                  │  - 白名單過濾      │                │  Copilot CLI         │
-                                 └──────────────────┘                │  + MCP (Tavily)       │
-                                                                      │  + Python 腳本        │
-                                                                      └──────────┬────────────┘
-                                                                                 │
-                                                              ┌──────────────────┼──────────────────┐
-                                                              │                  │                  │
-                                                              ▼                  ▼                  ▼
-                                                     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-                                                     │  aw-apps/    │  │  aw-apps/    │  │  aw-apps/    │
-                                                     │  app-1       │  │  app-2       │  │  app-3       │
-                                                     │ （子 Repo）   │  │ （子 Repo）   │  │  （Fork）     │
-                                                     └──────────────┘  └──────────────┘  └──────────────┘
-                                                       implement.yml     implement.yml     implement.yml
-                                                       review.yml        review.yml        review.yml
-                                                       GitHub Pages      GitHub Pages      GitHub Pages
+┌─────────────┐  webhook  ┌──────────────────┐  dispatch  ┌───────────────────────┐
+│  Telegram    │ ────────→ │  Cloudflare       │ ─────────→ │  GitHub Actions        │
+│  （使用者）   │ ←──────── │  Worker           │            │  （父 Repo）            │
+│              │  機器人回覆 │  - 身份驗證        │            │                        │
+└─────────────┘            │  - 白名單過濾      │            │  route_command.sh      │
+                           │  - KV 記憶         │            │  Copilot CLI           │
+                           │  - API 端點        │            │  + MCP (Tavily)        │
+                           └─────────┬──────────┘            │  + Python 腳本         │
+                                     │ /api/callback          └──────────┬────────────┘
+                                     │ (Actions 回傳)                    │
+                              KV Namespace                 ┌─────────────┼─────────────┐
+                         ┌──────────────────┐              ▼             ▼             ▼
+                         │  BOT_MEMORY      │       ┌──────────┐  ┌──────────┐  ┌──────────┐
+                         │  chat:* 歷史     │       │ aw-apps/ │  │ aw-apps/ │  │ aw-apps/ │
+                         │  repo:* 元資料   │       │  app-1   │  │  app-2   │  │  fork-1  │
+                         │  stats 統計      │       │ (子Repo) │  │ (子Repo) │  │  (Fork)  │
+                         └─────────┬────────┘       └──────────┘  └──────────┘  └──────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  Dashboard (GitHub Pages)    │
+                    │  /dashboard/                 │
+                    │  純前端，讀 Worker API        │
+                    │  零 GitHub API 呼叫           │
+                    └─────────────────────────────┘
 ```
 
 ### GitHub 組織與 Repo
@@ -101,6 +106,18 @@
 |------|------|------|
 | `yazelin/telegram-copilot-bot` | **父 Repo** | 託管機器人工作流程、App Factory 範本與 Python 腳本 |
 | `aw-apps/*` | **子 Repo** | 自動建立的網頁應用 Repo，各自擁有獨立 CI/CD |
+
+### Worker API 端點
+
+| 端點 | 方法 | 認證 | 說明 |
+|------|------|------|------|
+| `/webhook` | POST | Telegram Secret | 接收 Telegram Webhook |
+| `/register?token=<secret>` | GET | TELEGRAM_SECRET | 註冊 Telegram Webhook |
+| `/api/callback` | POST | X-Secret: CALLBACK_TOKEN | 接收 GitHub Actions 回傳（bot_reply / repo_created / repo_activity） |
+| `/api/stats` | GET | 無 | 取得統計（totalMessages, totalApps, totalDraws, totalBuilds） |
+| `/api/history/:chatId` | GET | 無 | 取得對話歷史 |
+| `/api/repos` | GET | 無 | 取得所有 Repo 元資料 |
+| `/api/sync-repos` | POST | X-Secret: CALLBACK_TOKEN | 同步 APPS_ORG 的 Repo 至 KV（含 Issue 進度、Fork 資訊） |
 
 ## 環境變數與 Secret
 
@@ -112,17 +129,23 @@
 |------|------|------|
 | `TELEGRAM_BOT_TOKEN` | Secret | Telegram Bot API Token |
 | `TELEGRAM_SECRET` | Secret | Webhook 簽名驗證 |
-| `GITHUB_TOKEN` | Secret | 觸發父 Repo 工作流程 |
-| `GITHUB_OWNER` | Secret | GitHub 帳號（例如 `yazelin`） |
+| `GITHUB_TOKEN` | Secret | 觸發父 Repo 工作流程（需 `actions:write`） |
+| `GITHUB_OWNER` | Secret | 父 Repo 擁有者（例如 `yazelin`） |
 | `GITHUB_REPO` | Secret | 父 Repo 名稱（例如 `telegram-copilot-bot`） |
+| `CALLBACK_TOKEN` | Secret | 保護 `/api/callback` 與 `/api/sync-repos`（`openssl rand -hex 20`） |
+| `APPS_ORG` | Secret | 子 Repo 所在的 GitHub 組織（例如 `aw-apps`） |
 | `ALLOWED_USERS` | Var | 允許的 Telegram User ID（逗號分隔） |
 | `ALLOWED_CHATS` | Var | 允許的 Telegram Chat ID（逗號分隔） |
+
+> **注意**：`GITHUB_OWNER` 為**父 Repo 擁有者**（觸發 Actions 用），`APPS_ORG` 為**子 Repo 組織**（sync-repos 與 issue count 用）。兩者必須分開設定。
 
 ### 父 Repo（GitHub Actions Secret）
 
 | Secret | 用途 | Token 類型 |
 |--------|------|------------|
 | `TELEGRAM_BOT_TOKEN` | 傳送 Telegram 訊息 | Telegram Bot API Token |
+| `CALLBACK_URL` | Worker callback 端點 URL | 純文字 URL |
+| `CALLBACK_TOKEN` | 驗證 callback 請求 | 與 Worker 相同值 |
 | `GEMINI_API_KEY` | 圖片生成（Google Gemini） | Google AI API Key |
 | `TAVILY_API_KEY` | 網路搜尋（Tavily MCP） | Tavily API Key |
 | `FACTORY_PAT` | 在 `aw-apps` 組織建立 Repo、設定 Secret | Fine-grained PAT |
@@ -147,15 +170,44 @@
 Cloudflare Worker                     父 Repo (telegram-copilot-bot)          子 Repo (aw-apps/*)
 ┌────────────────────┐               ┌────────────────────────┐              ┌─────────────────────┐
 │ TELEGRAM_BOT_TOKEN │               │ TELEGRAM_BOT_TOKEN     │              │                     │
-│ TELEGRAM_SECRET    │               │ GEMINI_API_KEY         │              │                     │
-│ GITHUB_TOKEN ──────┼── 觸發 ──────→│ TAVILY_API_KEY         │              │                     │
-│ GITHUB_OWNER       │               │ FACTORY_PAT ───────────┼── 建 Repo ──→│                     │
-│ GITHUB_REPO        │               │ FORK_TOKEN ────────────┼── Fork ─────→│                     │
+│ TELEGRAM_SECRET    │               │ CALLBACK_URL           │              │                     │
+│ GITHUB_TOKEN ──────┼── 觸發 ──────→│ CALLBACK_TOKEN         │              │                     │
+│ GITHUB_OWNER       │               │ GEMINI_API_KEY         │              │                     │
+│ GITHUB_REPO        │               │ TAVILY_API_KEY         │              │                     │
+│ CALLBACK_TOKEN     │←── callback ──│ FACTORY_PAT ───────────┼── 建 Repo ──→│                     │
+│ APPS_ORG           │               │ FORK_TOKEN ────────────┼── Fork ─────→│                     │
 │ ALLOWED_USERS      │               │ CHILD_COPILOT_TOKEN ───┼── 傳遞 ─────→│ COPILOT_GITHUB_TOKEN│
 │ ALLOWED_CHATS      │               │ COPILOT_PAT ───────────┼── 傳遞 ─────→│ COPILOT_PAT         │
 └────────────────────┘               │ NOTIFY_TOKEN ──────────┼── 傳遞 ─────→│ NOTIFY_TOKEN ───────┼── 回呼
                                      └────────────────────────┘              └─────────────────────┘
 ```
+
+## Dashboard
+
+部署於 GitHub Pages，網址：`https://<owner>.github.io/<repo>/dashboard/`
+
+### 功能
+
+- **統計卡片**：訊息總數、App 數、繪圖數、Build 數（從 KV 讀取）
+- **Repo 卡片**：名稱連結、描述、Issue 進度條（closed / total）、最後活動時間、互動類型徽章（created / build / msg）、Repo / Actions / Site 三個連結、Fork 來源標記
+- **對話歷史**：Telegram 風格氣泡，使用者（右對齊藍色）、機器人（左對齊白色）、命令（等寬字型灰底）
+- **設定面板**：滑入式側欄，可修改 Worker API URL 與 Chat ID，儲存於 localStorage
+- **零 GitHub API 呼叫**：所有資料均從 Worker `/api/stats`、`/api/history/:chatId`、`/api/repos` 讀取
+
+### 同步 Repo 資料
+
+首次部署或新增 Repo 後，執行以下指令將 aw-apps 組織的 Repo 同步至 KV：
+
+```bash
+curl -X POST https://<your-worker>.workers.dev/api/sync-repos \
+  -H "X-Secret: <CALLBACK_TOKEN>"
+```
+
+sync-repos 會：
+1. 從 `APPS_ORG` 組織（或用戶）讀取所有 Repo
+2. 從 GitHub API 取得各 Repo 的 Issue 進度與 Fork 來源（伺服器端，非瀏覽器）
+3. 建立或更新 KV 中的 `repo:*` 記錄
+4. 刪除在 GitHub 上已不存在的 KV 記錄
 
 ## App Factory 流水線
 
@@ -181,7 +233,7 @@ Issue 建立（copilot-task 標籤）
                                  （循環直到全部完成）
                                          │
                                          ▼
-                                   ✅ 全部完成
+                                   全部完成
                                    透過 Telegram 通知
 ```
 
@@ -202,9 +254,13 @@ Issue 建立（copilot-task 標籤）
 telegram-copilot-bot/
 ├── .github/
 │   ├── workflows/
-│   │   ├── telegram-bot.yml         # 主要工作流程（Copilot CLI）
+│   │   ├── telegram-bot.yml         # 主要工作流程（路由 + Copilot CLI）
 │   │   └── notify.yml               # Telegram 通知回呼
 │   ├── scripts/
+│   │   ├── route_command.sh         # 命令路由器（Shell 前處理）
+│   │   ├── gemini_chat.py           # Gemini Flash 文字 API（聊天/翻譯）
+│   │   ├── generate_image.py        # Gemini 圖片生成（REST API）
+│   │   ├── download_video.py        # yt-dlp 影片下載
 │   │   ├── create_repo.py           # 建立 GitHub Repo
 │   │   ├── fork_repo.py             # Fork 外部 Repo
 │   │   ├── setup_repo.py            # 推送初始檔案 + 啟用 Pages
@@ -213,10 +269,6 @@ telegram-copilot-bot/
 │   │   ├── trigger_workflow.py      # 觸發子 Repo 工作流程
 │   │   ├── post_comment.py          # Issue/PR 留言
 │   │   ├── manage_labels.py         # 標籤管理
-│   │   ├── route_command.sh          # 命令路由器（Shell 前處理）
-│   │   ├── gemini_chat.py           # Gemini Flash 文字 API（聊天/翻譯/prompt 優化）
-│   │   ├── generate_image.py        # Gemini 圖片生成（直接 REST API）
-│   │   ├── download_video.py        # yt-dlp 影片下載
 │   │   ├── send_telegram_message.py # 傳送文字
 │   │   ├── send_telegram_photo.py   # 傳送圖片
 │   │   └── send_telegram_video.py   # 傳送影片
@@ -229,8 +281,12 @@ telegram-copilot-bot/
 │           ├── code-standards-SKILL.md
 │           ├── testing-SKILL.md
 │           └── deploy-pages-SKILL.md
+├── dashboard/                       # Dashboard 前端（GitHub Pages）
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
 ├── worker/                          # Cloudflare Worker
-│   ├── src/index.js                 # Webhook 處理器 + 白名單
+│   ├── src/index.js                 # Webhook + KV 記憶 + API 端點
 │   └── wrangler.toml
 ├── prompt.md                        # Copilot CLI 主要 Prompt
 └── README.md
@@ -250,11 +306,16 @@ telegram-copilot-bot/
 ```bash
 cd worker
 npm install
+
+# 設定 secrets
 npx wrangler secret put TELEGRAM_BOT_TOKEN
-npx wrangler secret put TELEGRAM_SECRET
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put GITHUB_OWNER
-npx wrangler secret put GITHUB_REPO
+npx wrangler secret put TELEGRAM_SECRET        # openssl rand -hex 20
+npx wrangler secret put GITHUB_TOKEN           # 父 Repo actions:write PAT
+npx wrangler secret put GITHUB_OWNER           # 父 Repo 擁有者（如 yazelin）
+npx wrangler secret put GITHUB_REPO            # 父 Repo 名稱
+npx wrangler secret put CALLBACK_TOKEN         # openssl rand -hex 20
+npx wrangler secret put APPS_ORG               # 子 Repo 組織（如 aw-apps）
+
 npm run deploy
 ```
 
@@ -269,6 +330,8 @@ ALLOWED_CHATS = ""
 
 ```bash
 gh secret set TELEGRAM_BOT_TOKEN
+gh secret set CALLBACK_URL          # https://<your-worker>.workers.dev/api/callback
+gh secret set CALLBACK_TOKEN        # 與 Worker 相同值
 gh secret set GEMINI_API_KEY
 gh secret set TAVILY_API_KEY
 gh secret set FACTORY_PAT
@@ -284,9 +347,16 @@ gh secret set NOTIFY_TOKEN
 https://your-worker.workers.dev/register?token=YOUR_TELEGRAM_SECRET
 ```
 
-### 4. 測試
+### 4. 同步 Repo 資料至 Dashboard
 
-傳送訊息給你的 Telegram 機器人！
+```bash
+curl -X POST https://your-worker.workers.dev/api/sync-repos \
+  -H "X-Secret: YOUR_CALLBACK_TOKEN"
+```
+
+### 5. 測試
+
+傳送訊息給你的 Telegram 機器人，然後開啟 Dashboard 確認資料已同步！
 
 ## 相關文章
 
