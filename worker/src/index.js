@@ -230,6 +230,24 @@ async function handleWebhook(request, env, ctx) {
   return new Response("OK", { status: 200 });
 }
 
+// --- Issue Count Fetcher ---
+
+async function fetchIssueCounts(ownerRepo, token) {
+  try {
+    // ownerRepo format: "owner/repo"
+    const res = await fetch(
+      `https://api.github.com/repos/${ownerRepo}/issues?state=all&per_page=100`,
+      { headers: { Authorization: `Bearer ${token}`, "User-Agent": "telegram-copilot-bot" } }
+    );
+    if (!res.ok) return { total: 0, closed: 0 };
+    const issues = await res.json();
+    const real = issues.filter(i => !i.pull_request);
+    return { total: real.length, closed: real.filter(i => i.state === "closed").length };
+  } catch {
+    return { total: 0, closed: 0 };
+  }
+}
+
 // --- Callback Handler ---
 
 async function handleCallback(request, env) {
@@ -257,22 +275,36 @@ async function handleCallback(request, env) {
   }
 
   if (type === "repo_created" && repo && typeof repo === "string" && repo.length <= 200) {
-    const existing = (await env.BOT_MEMORY.get(`repo:${repo}`, "json")) || {};
+    if (!/^[\w.\-]{1,100}$/.test(repo)) {
+      return new Response("Invalid repo name", { status: 400 });
+    }
+    // Build the record first
+    let iTotal = issueTotal ?? 0;
+    let iClosed = issueClosed ?? 0;
+    // If issue counts not provided, fetch them
+    if ((issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.GITHUB_OWNER) {
+      const counts = await fetchIssueCounts(env.GITHUB_OWNER + "/" + repo, env.GITHUB_TOKEN);
+      iTotal = counts.total;
+      iClosed = counts.closed;
+    }
+    // Single write
     await env.BOT_MEMORY.put(`repo:${repo}`, JSON.stringify({
-      createdAt: existing.createdAt || timestamp || new Date().toISOString(),
-      command: command || existing.command || "",
-      chatId: chat_id || existing.chatId || "",
-      description: description || existing.description || "",
-      issueTotal: issueTotal ?? existing.issueTotal ?? 0,
-      issueClosed: issueClosed ?? existing.issueClosed ?? 0,
+      createdAt: timestamp || new Date().toISOString(),
+      command: command || "",
+      chatId: chat_id || "",
+      description: description || "",
+      issueTotal: iTotal,
+      issueClosed: iClosed,
       lastActivity: timestamp || new Date().toISOString(),
-      interactions: Array.isArray(existing.interactions)
-        ? [...existing.interactions, { type: "created", timestamp: timestamp || new Date().toISOString() }]
-        : [{ type: "created", timestamp: timestamp || new Date().toISOString() }],
+      interactions: [{ type: "created", timestamp: timestamp || new Date().toISOString() }],
     }));
   }
 
   if (type === "repo_activity" && repo && typeof repo === "string" && repo.length <= 200) {
+    if (!/^[\w.\-]{1,100}$/.test(repo)) {
+      return new Response("Invalid repo name", { status: 400 });
+    }
+    // Read existing record ONCE
     const key = `repo:${repo}`;
     let existing;
     try {
@@ -283,11 +315,22 @@ async function handleCallback(request, env) {
     }
     const interactions = Array.isArray(existing.interactions) ? existing.interactions : [];
     interactions.push({ type: activityType || "unknown", timestamp: timestamp || new Date().toISOString() });
+
+    // Fetch issue counts if needed
+    let iTotal = issueTotal ?? existing.issueTotal ?? 0;
+    let iClosed = issueClosed ?? existing.issueClosed ?? 0;
+    if (activityType === "msg" && (issueTotal === undefined || issueTotal === null) && env.GITHUB_TOKEN && env.GITHUB_OWNER) {
+      const counts = await fetchIssueCounts(env.GITHUB_OWNER + "/" + repo, env.GITHUB_TOKEN);
+      iTotal = counts.total;
+      iClosed = counts.closed;
+    }
+
+    // Single write with all data
     await env.BOT_MEMORY.put(key, JSON.stringify({
       ...existing,
       lastActivity: timestamp || new Date().toISOString(),
-      issueTotal: issueTotal ?? existing.issueTotal ?? 0,
-      issueClosed: issueClosed ?? existing.issueClosed ?? 0,
+      issueTotal: iTotal,
+      issueClosed: iClosed,
       interactions: interactions.slice(-20),
     }));
   }
