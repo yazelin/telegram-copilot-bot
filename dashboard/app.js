@@ -167,11 +167,21 @@ function renderRepos(reposData) {
 
     const progressWidth = iTotal > 0 ? pct : 0;
 
+    const forkHtml = meta.fork
+      ? `<span class="fork-badge">
+           <i class="mdi mdi-source-fork" aria-hidden="true"></i>Fork
+           ${meta.forkedFrom ? `<span class="fork-from">from <a href="https://github.com/${escapeHtml(meta.forkedFrom)}" target="_blank" rel="noopener noreferrer">${escapeHtml(meta.forkedFrom)}</a></span>` : ''}
+         </span>`
+      : '';
+
     return `
       <div class="repo-card" style="animation:rise .38s cubic-bezier(.16,1,.3,1) ${(idx * 45)}ms both">
-        <a class="repo-name" href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer">
-          <i class="mdi mdi-source-repository" aria-hidden="true"></i>${escapeHtml(name)}
-        </a>
+        <div class="repo-name-row">
+          <a class="repo-name" href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer">
+            <i class="mdi mdi-source-repository" aria-hidden="true"></i>${escapeHtml(name)}
+          </a>
+          ${forkHtml}
+        </div>
         ${desc ? `<div class="repo-desc">${escapeHtml(desc)}</div>` : '<div class="repo-desc" style="color:var(--text-3)">No description</div>'}
         <div class="progress-wrap">
           <div class="progress-outer">

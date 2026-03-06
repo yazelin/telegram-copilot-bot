@@ -289,12 +289,32 @@ async function handleSyncRepos(env) {
     // Fetch issue counts server-side
     const counts = await fetchIssueCounts(`${env.GITHUB_OWNER}/${repo.name}`, env.GITHUB_TOKEN);
 
+    // parent is not included in list response — fetch individually for forks
+    let forkData = { fork: false, forkedFrom: null };
+    if (repo.fork) {
+      try {
+        const fr = await fetch(
+          `https://api.github.com/repos/${env.GITHUB_OWNER}/${repo.name}`,
+          { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "telegram-copilot-bot" } }
+        );
+        if (fr.ok) {
+          const detail = await fr.json();
+          forkData = { fork: true, forkedFrom: detail.parent?.full_name || null };
+        } else {
+          forkData = { fork: true, forkedFrom: null };
+        }
+      } catch {
+        forkData = { fork: true, forkedFrom: null };
+      }
+    }
+
     if (existing) {
       // Update fields from GitHub, preserve bot interaction data
       await env.BOT_MEMORY.put(key, JSON.stringify({
         ...existing,
         owner: env.GITHUB_OWNER,
         hasPages: repo.has_pages || false,
+        ...forkData,
         issueTotal: counts.total,
         issueClosed: counts.closed,
         description: repo.description || existing.description || "",
@@ -305,6 +325,7 @@ async function handleSyncRepos(env) {
       await env.BOT_MEMORY.put(key, JSON.stringify({
         owner: env.GITHUB_OWNER,
         hasPages: repo.has_pages || false,
+        ...forkData,
         createdAt: repo.created_at || now,
         command: "",
         chatId: "",
