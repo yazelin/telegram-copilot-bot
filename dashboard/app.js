@@ -195,7 +195,7 @@ function renderRepos(ghRepos, kvMeta) {
             <div class="progress-bar-inner" style="width:0%" id="prog-${escapeHtml(repo.name)}"></div>
           </div>
           <div class="progress-label">
-            <span id="prog-label-${escapeHtml(repo.name)}">Loading issues...</span>
+            <span id="prog-label-${escapeHtml(repo.name)}">${openIssues} open</span>
             <span id="prog-pct-${escapeHtml(repo.name)}"></span>
           </div>
         </div>
@@ -208,14 +208,9 @@ function renderRepos(ghRepos, kvMeta) {
       </div>`;
   }).join('');
 
-  // attach click handlers for expand
+  // attach click handlers for expand (issues loaded on demand)
   container.querySelectorAll('.repo-card').forEach(card => {
     card.addEventListener('click', () => handleRepoClick(card));
-  });
-
-  // fetch issues for each repo in background (staggered to avoid rate limit)
-  ghRepos.forEach((repo, i) => {
-    setTimeout(() => loadIssuesForRepo(repo.owner?.login, repo.name), i * 200);
   });
 }
 
@@ -248,7 +243,14 @@ async function loadIssuesForRepo(org, repoName) {
 
 function handleRepoClick(card) {
   const repoName = card.dataset.repo;
+  const org = card.dataset.org;
   const isExpanded = card.classList.toggle('expanded');
+
+  // Load issues on first expand
+  if (isExpanded && !issuesCache[repoName]) {
+    loadIssuesForRepo(org, repoName);
+    return;
+  }
 
   if (isExpanded && issuesCache[repoName]) {
     const list = card.querySelector('.issues-list');
