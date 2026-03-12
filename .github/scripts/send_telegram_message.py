@@ -20,12 +20,13 @@ def post_callback(chat_id, text):
     req = urllib.request.Request(
         callback_url,
         data=payload,
-        headers={"Content-Type": "application/json", "X-Secret": callback_token},
+        headers={"Content-Type": "application/json", "X-Secret": callback_token, "User-Agent": "telegram-copilot-bot/1.0"},
     )
     try:
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
+        resp = urllib.request.urlopen(req, timeout=5)
+        resp.read()
+    except Exception as e:
+        print(f"[post_callback] FAILED: {e}", file=sys.stderr)
 
 def main():
     if len(sys.argv) < 3:
