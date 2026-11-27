@@ -69,7 +69,7 @@ jobs:
         if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install GitHub Copilot CLI
         if: steps.route.outputs.needs_copilot == 'true' && steps.feature_gate.outputs.skip != 'true'
